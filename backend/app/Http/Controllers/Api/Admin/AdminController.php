@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Contracts\PaymentGateway;
 use App\Enums\PayoutStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Organizer;
 use App\Models\Payout;
+use App\Models\Setting;
 use App\Services\MayarService;
+use App\Services\PaymentManager;
 use App\Services\ReportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -134,6 +137,57 @@ class AdminController extends Controller
                 'url' => Storage::disk('public')->url($path),
             ],
         ], 201);
+    }
+
+    /**
+     * Pengaturan gateway pembayaran (hanya admin yang bisa mengubah).
+     */
+    public function paymentSettings(PaymentManager $payments)
+    {
+        $available = collect($payments->availableGateways())->map(fn (PaymentGateway $g) => [
+            'id' => $g->name(),
+            'label' => $g->name() === 'xendit' ? 'Xendit' : ucfirst($g->name()),
+            'available' => true,
+        ])->values();
+
+        $all = collect($payments->allGateways())->map(fn (PaymentGateway $g) => [
+            'id' => $g->name(),
+            'label' => $g->name() === 'xendit' ? 'Xendit' : ucfirst($g->name()),
+            'available' => $g->isEnabled(),
+        ])->values();
+
+        return response()->json([
+            'gateways' => $all,
+            'active' => $payments->configuredOrder(),
+            'available_count' => $available->count(),
+        ]);
+    }
+
+    public function updatePaymentSettings(Request $request, PaymentManager $payments)
+    {
+        $data = $request->validate([
+            'gateways' => ['present', 'array'],
+            'gateways.*' => ['string', 'in:mayar,xendit'],
+        ]);
+
+        $allowed = collect($payments->availableGateways())->map(fn (PaymentGateway $g) => $g->name());
+
+        // Hanya gateway yang kredensialnya tersedia yang boleh diaktifkan.
+        $active = array_values(array_filter($data['gateways'], fn ($name) => $allowed->contains($name)));
+
+        if (empty($active)) {
+            return response()->json([
+                'message' => 'Minimal satu gateway yang tersedia harus diaktifkan.',
+                'available' => $allowed->values(),
+            ], 422);
+        }
+
+        Setting::put('payment_gateways', $active);
+
+        return response()->json([
+            'message' => 'Pengaturan pembayaran disimpan.',
+            'active' => $active,
+        ]);
     }
 
     public function mayarWebhookInfo(MayarService $mayar)

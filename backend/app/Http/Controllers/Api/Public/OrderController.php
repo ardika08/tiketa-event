@@ -25,7 +25,6 @@ class OrderController extends Controller
             'threads' => ['nullable', 'string', 'max:100'],
             'form_data' => ['nullable', 'array'],
             'voucher_code' => ['nullable', 'string'],
-            'gateway' => ['nullable', 'string', 'in:mayar,xendit'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.ticket_type_id' => ['required', 'integer'],
             'items.*.jumlah' => ['required', 'integer', 'min:1'],
@@ -48,7 +47,7 @@ class OrderController extends Controller
             $data['voucher_code'] ?? null,
         );
 
-        $created = $payments->createFor($order, $data['gateway'] ?? null);
+        $created = $payments->createFor($order);
 
         if (! $created) {
             $orders->cancel($order);

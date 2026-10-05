@@ -153,5 +153,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/uploads', [AdminController::class, 'upload']);
         Route::get('/mayar/webhook', [AdminController::class, 'mayarWebhookInfo']);
         Route::post('/mayar/webhook', [AdminController::class, 'registerMayarWebhook']);
+
+        Route::get('/payment-settings', [AdminController::class, 'paymentSettings']);
+        Route::put('/payment-settings', [AdminController::class, 'updatePaymentSettings']);
     });
 });

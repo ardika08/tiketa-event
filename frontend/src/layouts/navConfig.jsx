@@ -17,6 +17,7 @@ import {
   TrendingUp,
   FileText,
   Handshake,
+  Settings,
   ShoppingBag,
   Banknote,
 } from 'lucide-react'
@@ -68,4 +69,5 @@ export const adminNav = [
   { type: 'link', to: '/admin/pendapatan', label: 'Pendapatan Platform', icon: TrendingUp },
   { type: 'link', to: '/admin/pencairan', label: 'Pencairan Mitra', icon: Banknote },
   { type: 'link', to: '/admin/laporan', label: 'Laporan & Ekspor', icon: FileText },
+  { type: 'link', to: '/admin/pengaturan', label: 'Pengaturan Pembayaran', icon: Settings },
 ]

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Contracts\PaymentGateway;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Setting;
 use App\Services\Gateways\XenditService;
 
 /**
@@ -25,18 +26,48 @@ class PaymentManager
     /**
      * @return array<int, PaymentGateway>
      */
-    public function gateways(): array
+    public function allGateways(): array
     {
-        $map = [
-            'mayar' => $this->mayar,
-            'xendit' => $this->xendit,
-        ];
-
-        $order = array_filter(array_map('trim', explode(',', (string) config('nontix.gateways', 'mayar,xendit'))));
-
-        return array_values(array_filter(array_map(fn ($name) => $map[$name] ?? null, $order)));
+        return [$this->mayar, $this->xendit];
     }
 
+    /**
+     * Urutan nama gateway: dari pengaturan admin, atau default config.
+     *
+     * @return array<int, string>
+     */
+    public function configuredOrder(): array
+    {
+        $fromSetting = Setting::paymentGateways();
+
+        if (is_array($fromSetting)) {
+            return $fromSetting;
+        }
+
+        return array_values(array_filter(array_map('trim', explode(',', (string) config('nontix.gateways', 'mayar,xendit')))));
+    }
+
+    public function gateways(): array
+    {
+        $map = [];
+        foreach ($this->allGateways() as $gateway) {
+            $map[$gateway->name()] = $gateway;
+        }
+
+        return array_values(array_filter(array_map(fn ($name) => $map[$name] ?? null, $this->configuredOrder())));
+    }
+
+    /**
+     * Gateway yang tersedia secara teknis (kredensial terisi).
+     */
+    public function availableGateways(): array
+    {
+        return array_values(array_filter($this->allGateways(), fn (PaymentGateway $g) => $g->isEnabled()));
+    }
+
+    /**
+     * Gateway yang boleh dipakai: sudah diaktifkan admin DAN tersedia.
+     */
     public function enabledGateways(): array
     {
         return array_values(array_filter($this->gateways(), fn (PaymentGateway $g) => $g->isEnabled()));

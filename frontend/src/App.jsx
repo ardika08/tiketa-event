@@ -43,6 +43,7 @@ import AdminPartnerDetail from './pages/admin/AdminPartnerDetail'
 import AdminRevenue from './pages/admin/AdminRevenue'
 import AdminReports from './pages/admin/AdminReports'
 import AdminPayouts from './pages/admin/AdminPayouts'
+import AdminSettings from './pages/admin/AdminSettings'
 
 function ProtectedRoute({ role, children }) {
   const { user } = useAuth()
@@ -117,6 +118,7 @@ export default function App() {
               <Route path="pendapatan" element={<AdminRevenue />} />
               <Route path="pencairan" element={<AdminPayouts />} />
               <Route path="laporan" element={<AdminReports />} />
+              <Route path="pengaturan" element={<AdminSettings />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

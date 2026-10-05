@@ -195,4 +195,6 @@ export const adminApi = {
   payouts: () => api.get('/admin/payouts'),
   updatePayout: (id, payload) => api.put(`/admin/payouts/${id}`, payload),
   upload: (file) => upload('/admin/uploads', file),
+  paymentSettings: () => api.get('/admin/payment-settings'),
+  updatePaymentSettings: (payload) => api.put('/admin/payment-settings', payload),
 }
