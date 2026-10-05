@@ -25,16 +25,21 @@ class XenditService implements PaymentGateway
 
     public function isEnabled(): bool
     {
-        $secret = config('nontix.xendit.secret_key');
+        $secret = (string) config('nontix.xendit.secret_key');
 
-        if (! $secret) {
+        if ($secret === '') {
+            return false;
+        }
+
+        // Public key tidak bisa dipakai untuk autentikasi server (Basic auth).
+        if (str_contains($secret, 'xnd_public_')) {
             return false;
         }
 
         $mode = config('nontix.xendit.mode', 'test');
 
-        // Mode live membutuhkan kunci produksi (bukan xnd_development_*).
-        if ($mode === 'live' && str_contains((string) $secret, 'development')) {
+        // Mode live wajib kunci produksi (xnd_production_*), bukan development.
+        if ($mode === 'live' && ! str_contains($secret, 'production')) {
             return false;
         }
 

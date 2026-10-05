@@ -194,4 +194,24 @@ class XenditGatewayTest extends TestCase
 
         $this->assertTrue($ids->contains('xendit'));
     }
+
+    public function test_public_key_is_rejected(): void
+    {
+        config()->set('nontix.xendit.secret_key', 'xnd_public_production_abc');
+        config()->set('nontix.xendit.mode', 'live');
+
+        $res = $this->getJson('/api/payments/gateways')->assertOk();
+
+        $this->assertFalse(collect($res->json('data'))->pluck('id')->contains('xendit'));
+    }
+
+    public function test_live_mode_requires_production_key(): void
+    {
+        config()->set('nontix.xendit.secret_key', 'xnd_development_abc');
+        config()->set('nontix.xendit.mode', 'live');
+
+        $res = $this->getJson('/api/payments/gateways')->assertOk();
+
+        $this->assertFalse(collect($res->json('data'))->pluck('id')->contains('xendit'));
+    }
 }
