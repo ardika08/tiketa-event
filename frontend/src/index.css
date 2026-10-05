@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-50: #eef5ff;
+  --color-brand-100: #d9e8ff;
+  --color-brand-200: #bcd8ff;
+  --color-brand-300: #8ec0ff;
+  --color-brand-400: #599dff;
+  --color-brand-500: #2f7bff;
+  --color-brand-600: #0362fd;
+  --color-brand-700: #034ed4;
+  --color-brand-800: #073faa;
+  --color-brand-900: #0b3886;
+  --color-accent-500: #38bdf8;
+  --color-accent-600: #0ea5e9;
+
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-card-hover: 0 10px 30px -12px rgba(15, 23, 42, 0.18);
+  --shadow-button: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --radius-card: 1rem;
+  --radius-control: 0.75rem;
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Kunci zoom (pinch/double-tap) di perangkat sentuh */
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: none;
+}
+
+/* Cegah double-tap zoom pada elemen interaktif */
+button,
+a,
+input,
+select,
+textarea,
+label {
+  touch-action: manipulation;
+}
+
+body {
+  @apply bg-slate-50 text-[15px] leading-relaxed text-slate-700 antialiased;
+  font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  overflow-x: hidden;
+  width: 100%;
+}
+
+#root {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  font-family: var(--font-display);
+  @apply tracking-tight;
+}
+
+::selection {
+  background-color: #0f172a;
+  color: #ffffff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+@utility container-page {
+  @apply mx-auto w-full max-w-[1536px] px-5 sm:px-8 lg:px-10;
+}
+
+@utility card {
+  @apply rounded-[var(--radius-card)] border border-slate-200 bg-white;
+  box-shadow: var(--shadow-card);
+}
+
+@utility card-hover {
+  @apply transition duration-200;
+}
+.card-hover:hover {
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+
+@utility input {
+  @apply w-full rounded-[var(--radius-control)] border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-800
+    placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/15;
+}
+
+/* Cegah auto-zoom saat fokus input di iOS/Android (butuh font >= 16px). */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea,
+  .input {
+    font-size: 16px !important;
+  }
+}
+
+@utility label {
+  @apply mb-1.5 block text-sm font-semibold text-slate-700;
+}
+
+.hero-event__image {
+  background-position: center center;
+  transform: scale(1.01);
+}
+
+.hero-event__overlay {
+  background:
+    linear-gradient(180deg, rgba(2, 6, 23, 0.5) 0%, rgba(2, 18, 54, 0.58) 58%, rgba(3, 40, 92, 0.72) 100%),
+    linear-gradient(90deg, rgba(3, 78, 212, 0.24), transparent 52%, rgba(14, 165, 233, 0.16));
+}
+
+.hero-event__content {
+  animation: hero-enter 600ms ease-out both;
+}
+
+.category-scroll {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.category-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes hero-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-event__content {
+    animation: none;
+  }
+
+  .hero-event__image {
+    transform: none;
+  }
+}

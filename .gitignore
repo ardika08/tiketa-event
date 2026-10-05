@@ -1,0 +1,17 @@
+# Arsip paket manual (jangan di-commit)
+*.tar.gz
+*.zip
+
+# Env & backup
+.env
+.env.backup
+backend/.env
+backend/.env.backup
+
+# Database sqlite lokal
+backend/database/*.sqlite
+backend/database/*.sqlite-journal
+
+# OS
+.DS_Store
+Thumbs.db

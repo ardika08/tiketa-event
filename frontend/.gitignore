@@ -1,0 +1,7 @@
+node_modules
+dist-ssr
+*.local
+.vite
+.DS_Store
+
+# dist DI-COMMIT agar server tidak perlu build (tanpa Node/npm)

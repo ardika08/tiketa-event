@@ -1,0 +1,13 @@
+# ============================================================
+# Cron Nontix untuk cPanel
+# Ganti:
+#   /opt/cpanel/ea-php82/root/usr/bin/php  -> path PHP 8.2 (lihat MultiPHP Manager)
+#   /home/USER/nontix-backend              -> lokasi project backend di server
+# Tambahkan lewat cPanel -> Cron Jobs (2 baris di bawah).
+# ============================================================
+
+# Scheduler: pembatalan order kadaluarsa + rekonsiliasi pembayaran Mayar
+* * * * * /opt/cpanel/ea-php82/root/usr/bin/php /home/USER/nontix-backend/artisan schedule:run >> /dev/null 2>&1
+
+# Queue worker dipicu tiap menit (kirim email invoice/e-ticket)
+* * * * * /opt/cpanel/ea-php82/root/usr/bin/php /home/USER/nontix-backend/artisan queue:work --stop-when-empty --max-time=55 >> /dev/null 2>&1
