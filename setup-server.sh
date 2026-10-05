@@ -32,13 +32,15 @@ if command -v rsync >/dev/null 2>&1; then
   rsync -a --delete \
     --exclude '.env' --exclude '.env.backup' \
     --exclude 'vendor/' \
+    --exclude 'public/storage' \
     --exclude 'storage/app/' --exclude 'storage/logs/' --exclude 'storage/framework/' \
     --exclude 'bootstrap/cache/' \
     "$BE_SRC/" "$BE_DST/"
 else
   tar -C "$BE_SRC" \
     --exclude=.env --exclude=.env.backup \
-    --exclude=vendor --exclude=storage/app --exclude=storage/logs \
+    --exclude=vendor --exclude=public/storage \
+    --exclude=storage/app --exclude=storage/logs \
     --exclude=storage/framework --exclude=bootstrap/cache \
     -cf - . | tar -C "$BE_DST" -xf -
 fi

@@ -32,13 +32,15 @@ sync_tree() {
     rsync -a --delete \
       --exclude '.env' --exclude '.env.backup' \
       --exclude 'vendor/' \
+      --exclude 'public/storage' \
       --exclude 'storage/app/' --exclude 'storage/logs/' --exclude 'storage/framework/' \
       --exclude 'bootstrap/cache/' \
       "$src/" "$dst/"
   else
     tar -C "$src" \
       --exclude=.env --exclude=.env.backup \
-      --exclude=vendor --exclude=storage/app --exclude=storage/logs \
+      --exclude=vendor --exclude=public/storage \
+      --exclude=storage/app --exclude=storage/logs \
       --exclude=storage/framework --exclude=bootstrap/cache \
       -cf - . | tar -C "$dst" -xf -
   fi
