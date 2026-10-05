@@ -39,6 +39,41 @@ class MayarWebhookTest extends TestCase
         return Order::where('kode_order', $kode)->firstOrFail();
     }
 
+    public function test_webhook_payment_reminder_does_not_mark_order_paid(): void
+    {
+        Queue::fake();
+        $order = $this->createOrder();
+
+        $this->postJson('/api/payments/callback', [
+            'event' => 'payment.reminder',
+            'data' => [
+                'status' => true,
+                'customerEmail' => $order->email,
+                'amount' => (int) $order->total_harga,
+                'extraData' => ['noCustomer' => $order->kode_order],
+            ],
+        ])->assertOk();
+
+        // Order harus TETAP pending — pengingat bukan pembayaran.
+        $this->assertSame(OrderStatus::PENDING, $order->fresh()->status);
+    }
+
+    public function test_webhook_unknown_event_with_boolean_status_does_not_mark_paid(): void
+    {
+        Queue::fake();
+        $order = $this->createOrder();
+
+        $this->postJson('/api/payments/callback', [
+            'data' => [
+                'status' => true,
+                'customerEmail' => $order->email,
+                'amount' => (int) $order->total_harga,
+            ],
+        ])->assertOk();
+
+        $this->assertSame(OrderStatus::PENDING, $order->fresh()->status);
+    }
+
     public function test_webhook_payment_received_marks_order_paid_by_order_code(): void
     {
         Queue::fake();

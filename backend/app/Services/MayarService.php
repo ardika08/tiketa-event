@@ -138,6 +138,27 @@ class MayarService
     }
 
     /**
+     * Konfirmasi ke API Mayar bahwa invoice benar-benar berstatus dibayar.
+     * Dipakai webhook sebagai verifikasi tambahan, sehingga payload yang
+     * menyesatkan (mis. payment.reminder) tidak menandai order lunas.
+     */
+    public function confirmInvoicePaid(Order $order): bool
+    {
+        if (! $this->isLive()) {
+            return true;
+        }
+
+        $invoice = $this->currentInvoice($order);
+
+        // Bila API tidak bisa dihubungi, jangan ubah status (aman).
+        if ($invoice === null) {
+            return false;
+        }
+
+        return $this->isPaidStatus(data_get($invoice, 'status'));
+    }
+
+    /**
      * Cek status invoice dan tandai order lunas bila sudah dibayar.
      * Berguna sebagai rekonsiliasi bila webhook tidak sampai.
      */
@@ -166,6 +187,21 @@ class MayarService
         }
 
         return false;
+    }
+
+    /**
+     * Ambil data invoice terkini milik sebuah order (null bila tidak ada).
+     */
+    private function currentInvoice(Order $order): ?array
+    {
+        $payment = $order->payments()->latest()->first();
+        $invoiceId = $payment?->mayar_invoice_id;
+
+        if (! $invoiceId || str_starts_with((string) $invoiceId, 'FAKE-')) {
+            return null;
+        }
+
+        return $this->getInvoiceStatus($invoiceId);
     }
 
     /**
@@ -277,22 +313,48 @@ class MayarService
             ?? data_get($payload, 'id');
     }
 
-    public function isPaidPayload(array $payload): bool
+    /**
+     * Tentukan jenis event webhook dari payload (mis. payment.received).
+     */
+    public function extractEvent(array $payload): string
     {
-        $event = strtolower((string) (data_get($payload, 'event') ?? data_get($payload, 'event.received') ?? ''));
-        if ($event === 'payment.received') {
-            return true;
+        $event = data_get($payload, 'event')
+            ?? data_get($payload, 'event.received')
+            ?? data_get($payload, 'data.event')
+            ?? data_get($payload, 'type')
+            ?? '';
+
+        if (is_array($event)) {
+            $event = reset($event) ?: '';
         }
 
+        return strtolower(trim((string) $event));
+    }
+
+    /**
+     * Payload webhook hanya dicap "lunas" bila jenis event-nya benar-benar
+     * pembayaran diterima (payment.received). Event lain (mis. payment.reminder)
+     * TIDAK boleh menandai order lunas.
+     */
+    public function isPaidPayload(array $payload): bool
+    {
+        $event = $this->extractEvent($payload);
+
+        if ($event !== '') {
+            // Hanya payment.received yang menandakan pembayaran diterima.
+            return str_contains($event, 'payment.received');
+        }
+
+        // Fallback (payload tanpa info event): status eksplisit saja.
         $status = data_get($payload, 'data.status') ?? data_get($payload, 'status');
         if (is_bool($status)) {
-            return $status;
+            return false; // Jangan percaya boolean tanpa konteks event.
         }
 
         return $this->isPaidStatus($status);
     }
 
-    private function isPaidStatus(mixed $status): bool
+    public function isPaidStatus(mixed $status): bool
     {
         if (is_bool($status)) {
             return $status;

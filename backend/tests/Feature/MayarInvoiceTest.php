@@ -116,6 +116,10 @@ class MayarInvoiceTest extends TestCase
             'api.mayar.id/hl/v1/invoice/create' => Http::response([
                 'data' => ['id' => 'inv-tok', 'link' => 'https://contoh.mayar.shop/invoices/tok'],
             ], 200),
+            // Verifikasi webhook kini mengecek status asli ke Mayar.
+            'api.mayar.id/hl/v1/invoice/inv-tok' => Http::response([
+                'data' => ['id' => 'inv-tok', 'status' => 'paid'],
+            ], 200),
         ]);
 
         $kode = $this->postJson('/api/orders', $this->orderPayload($event->id, $ticket->id))->json('data.kode_order');

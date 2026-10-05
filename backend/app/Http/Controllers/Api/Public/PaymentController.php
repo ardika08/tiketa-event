@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Services\MayarService;
 use App\Services\OrderService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
@@ -33,8 +34,20 @@ class PaymentController extends Controller
             return response()->json(['message' => 'Order tidak ditemukan untuk payload ini.'], 404);
         }
 
-        if ($mayar->isPaidPayload($payload)) {
+        $event = $mayar->extractEvent($payload);
+        $paidPayload = $mayar->isPaidPayload($payload);
+
+        // Verifikasi langsung ke API Mayar (sumber kebenaran) untuk payload lunas.
+        // Ini mencegah order ditandai lunas hanya karena event/status menyesatkan.
+        if ($paidPayload) {
+            $paidPayload = $mayar->confirmInvoicePaid($order);
+        }
+
+        if ($paidPayload) {
             $orders->markPaid($order, $payload, 'mayar');
+            Log::info('[Mayar] Webhook menandai order lunas', ['order' => $order->kode_order, 'event' => $event]);
+        } else {
+            Log::info('[Mayar] Webhook diabaikan (bukan pembayaran diterima)', ['order' => $order->kode_order, 'event' => $event]);
         }
 
         return response()->json(['message' => 'Callback diterima.']);
