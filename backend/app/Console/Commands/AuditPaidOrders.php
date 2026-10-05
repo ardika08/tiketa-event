@@ -58,15 +58,17 @@ class AuditPaidOrders extends Command
                 $this->warn("  ! {$order->kode_order}: lunas di DB, tapi Mayar='{$status}'");
 
                 if ($execute) {
+                    // Order dikembalikan ke pending dengan batas bayar baru.
+                    // PENTING: jangan menyentuh sisa_kuota di sini — kuota sudah
+                    // dipulihkan saat order aslinya dibatalkan/kadaluarsa. Order
+                    // pending yang lewat batas akan ditangani expire-orders
+                    // (idempoten: hanya memproses status pending).
                     DB::transaction(function () use ($order) {
-                        foreach ($order->items as $item) {
-                            $item->ticketType()->increment('sisa_kuota', $item->jumlah);
-                        }
-
                         $order->tickets()->delete();
                         $order->update([
                             'status' => OrderStatus::PENDING,
                             'paid_at' => null,
+                            'batas_bayar' => now()->addMinutes((int) config('nontix.order_expiry_minutes')),
                         ]);
 
                         $order->payments()->latest()->first()?->update([
@@ -75,7 +77,7 @@ class AuditPaidOrders extends Command
                         ]);
                     });
 
-                    $this->info("    -> {$order->kode_order} dikembalikan ke pending (kuota dipulihkan).");
+                    $this->info("    -> {$order->kode_order} dikembalikan ke pending (batas bayar baru, kuota tidak disentuh).");
                 }
             } else {
                 $this->line("  = {$order->kode_order}: valid lunas");

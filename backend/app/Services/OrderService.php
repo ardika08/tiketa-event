@@ -200,6 +200,9 @@ class OrderService
 
     /**
      * Batalkan order (manual/kadaluarsa) dan kembalikan kuota + voucher.
+     *
+     * Idempoten: hanya order berstatus pending yang diproses, sehingga aman
+     * dipanggil berkali-kali (tidak menggandakan pengembalian kuota).
      */
     public function cancel(Order $order, OrderStatus $status = OrderStatus::CANCELLED): Order
     {
