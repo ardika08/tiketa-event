@@ -6,13 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\OrderResource;
 use App\Models\Event;
 use App\Models\Order;
-use App\Services\MayarService;
 use App\Services\OrderService;
+use App\Services\PaymentManager;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class OrderController extends Controller
 {
-    public function store(Request $request, OrderService $orders, MayarService $mayar)
+    public function store(Request $request, OrderService $orders, PaymentManager $payments)
     {
         $data = $request->validate([
             'event_id' => ['required', 'exists:events,id'],
@@ -24,6 +25,7 @@ class OrderController extends Controller
             'threads' => ['nullable', 'string', 'max:100'],
             'form_data' => ['nullable', 'array'],
             'voucher_code' => ['nullable', 'string'],
+            'gateway' => ['nullable', 'string', 'in:mayar,xendit'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.ticket_type_id' => ['required', 'integer'],
             'items.*.jumlah' => ['required', 'integer', 'min:1'],
@@ -46,7 +48,15 @@ class OrderController extends Controller
             $data['voucher_code'] ?? null,
         );
 
-        $mayar->createInvoice($order);
+        $created = $payments->createFor($order, $data['gateway'] ?? null);
+
+        if (! $created) {
+            $orders->cancel($order);
+
+            throw ValidationException::withMessages([
+                'gateway' => 'Tidak ada metode pembayaran yang tersedia saat ini. Coba lagi nanti.',
+            ]);
+        }
 
         return (new OrderResource($order->fresh($orders->relations())))
             ->response()

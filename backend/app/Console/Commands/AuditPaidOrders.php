@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\OrderStatus;
 use App\Models\Order;
-use App\Services\MayarService;
+use App\Services\PaymentManager;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -14,12 +14,12 @@ class AuditPaidOrders extends Command
         {--execute : Benar-benar kembalikan order yang ternyata belum dibayar}
         {--limit=200 : Jumlah maksimum order lunas yang diperiksa}';
 
-    protected $description = 'Audit order berstatus lunas ke API Mayar; kembalikan ke pending bila invoice belum dibayar';
+    protected $description = 'Audit order berstatus lunas ke API gateway (Mayar/Xendit); kembalikan ke pending bila belum dibayar';
 
-    public function handle(MayarService $mayar): int
+    public function handle(PaymentManager $payments): int
     {
-        if (! $mayar->isLive()) {
-            $this->warn('Mayar tidak dalam mode live, audit dilewati.');
+        if (empty($payments->enabledGateways())) {
+            $this->warn('Tidak ada gateway aktif, audit dilewati.');
 
             return self::SUCCESS;
         }
@@ -28,7 +28,7 @@ class AuditPaidOrders extends Command
         $limit = (int) $this->option('limit');
 
         $orders = Order::where('status', OrderStatus::PAID)
-            ->whereHas('payments', fn ($q) => $q->whereNotNull('mayar_invoice_id'))
+            ->whereHas('payments')
             ->with('payments', 'items')
             ->latest('paid_at')
             ->limit($limit)
@@ -39,53 +39,45 @@ class AuditPaidOrders extends Command
         $salah = 0;
 
         foreach ($orders as $order) {
-            $payment = $order->payments->sortByDesc('id')->first();
-            $invoiceId = $payment?->mayar_invoice_id;
+            $gateway = $payments->forOrder($order);
 
-            if (! $invoiceId || str_starts_with((string) $invoiceId, 'FAKE-')) {
+            if (! $gateway) {
                 continue;
             }
 
-            $invoice = $mayar->getInvoiceStatus($invoiceId);
-            if (! $invoice) {
-                $this->line("  ? {$order->kode_order}: status tidak bisa diambil");
+            if ($gateway->confirmPaid($order)) {
+                $this->line("  = {$order->kode_order}: valid lunas ({$gateway->name()})");
+
                 continue;
             }
 
-            if (! $mayar->isPaidStatus(data_get($invoice, 'status'))) {
-                $salah++;
-                $status = data_get($invoice, 'status');
-                $this->warn("  ! {$order->kode_order}: lunas di DB, tapi Mayar='{$status}'");
+            $salah++;
+            $this->warn("  ! {$order->kode_order}: lunas di DB, tapi gateway {$gateway->name()} menyatakan belum dibayar");
 
-                if ($execute) {
-                    // Order dikembalikan ke pending dengan batas bayar baru.
-                    // PENTING: jangan menyentuh sisa_kuota di sini — kuota sudah
-                    // dipulihkan saat order aslinya dibatalkan/kadaluarsa. Order
-                    // pending yang lewat batas akan ditangani expire-orders
-                    // (idempoten: hanya memproses status pending).
-                    DB::transaction(function () use ($order) {
-                        $order->tickets()->delete();
-                        $order->update([
-                            'status' => OrderStatus::PENDING,
-                            'paid_at' => null,
-                            'batas_bayar' => now()->addMinutes((int) config('nontix.order_expiry_minutes')),
-                        ]);
+            if ($execute) {
+                // Batas bayar baru; kuota TIDAK disentuh (sudah dipulihkan saat
+                // dibatalkan/kadaluarsa). Order pending yang lewat batas
+                // ditangani expire-orders yang idempoten.
+                DB::transaction(function () use ($order) {
+                    $order->tickets()->delete();
+                    $order->update([
+                        'status' => OrderStatus::PENDING,
+                        'paid_at' => null,
+                        'batas_bayar' => now()->addMinutes((int) config('nontix.order_expiry_minutes')),
+                    ]);
 
-                        $order->payments()->latest()->first()?->update([
-                            'status' => 'pending',
-                            'paid_at' => null,
-                        ]);
-                    });
+                    $order->payments()->latest()->first()?->update([
+                        'status' => 'pending',
+                        'paid_at' => null,
+                    ]);
+                });
 
-                    $this->info("    -> {$order->kode_order} dikembalikan ke pending (batas bayar baru, kuota tidak disentuh).");
-                }
-            } else {
-                $this->line("  = {$order->kode_order}: valid lunas");
+                $this->info("    -> {$order->kode_order} dikembalikan ke pending (batas bayar baru, kuota tidak disentuh).");
             }
         }
 
         if (! $execute && $salah > 0) {
-            $this->warn("");
+            $this->warn('');
             $this->warn("Ditemukan {$salah} order bermasalah. Jalankan ulang dengan --execute untuk memperbaiki.");
         }
 

@@ -13,12 +13,22 @@ class OrderResource extends JsonResource
         $paymentUrl = $this->whenLoaded('payments', function () {
             $latest = $this->payments->sortByDesc('id')->first();
 
-            return $latest ? (data_get($latest->payload, 'payment_url') ?? data_get($latest->payload, 'link')) : null;
+            return $latest?->payment_url
+                ?? data_get($latest?->payload, 'payment_url')
+                ?? data_get($latest?->payload, 'link');
         });
         $paymentProvider = $this->whenLoaded('payments', function () {
             $latest = $this->payments->sortByDesc('id')->first();
 
-            return $latest ? (data_get($latest->payload, 'mode') === 'live' ? 'mayar' : 'fake') : null;
+            if (! $latest) {
+                return null;
+            }
+
+            if ($latest->provider) {
+                return data_get($latest->payload, 'mode') === 'fake' ? 'fake' : $latest->provider;
+            }
+
+            return data_get($latest->payload, 'mode') === 'live' ? 'mayar' : 'fake';
         });
 
         return [

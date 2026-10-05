@@ -2,65 +2,81 @@
 
 namespace App\Http\Controllers\Api\Public;
 
+use App\Contracts\PaymentGateway;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
-use App\Models\Payment;
-use App\Services\MayarService;
 use App\Services\OrderService;
+use App\Services\PaymentManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
+    public function __construct(private PaymentManager $manager)
+    {
+    }
+
     /**
-     * Webhook dari Mayar (event: payment.received).
+     * Daftar gateway yang tersedia untuk dipilih pembeli.
+     */
+    public function gateways()
+    {
+        return response()->json(['data' => $this->manager->options()]);
+    }
+
+    /**
+     * Webhook dari payment gateway.
+     * Satu URL menangani semua provider; provider dikenali dari payload/token.
      *
      * @see https://docs.mayar.id/integration/webhook
+     * @see https://docs.xendit.co/apidocs/payment-webhook-notification
      */
-    public function callback(Request $request, MayarService $mayar, OrderService $orders)
+    public function callback(Request $request, OrderService $orders)
     {
         $payload = $request->all();
-        $token = $request->header('X-Callback-Token')
+        $token = $request->header('x-callback-token')
+            ?? $request->header('X-Callback-Token')
             ?? $request->query('token')
             ?? $request->input('token');
 
-        if (! $mayar->verifyCallback($payload, $token)) {
-            return response()->json(['message' => 'Token callback tidak valid.'], 401);
+        foreach ($this->manager->enabledGateways() as $gateway) {
+            $order = $gateway->resolveOrder($payload);
+
+            if (! $order) {
+                continue;
+            }
+
+            if (! $gateway->verifyWebhook($payload, $token)) {
+                Log::warning('[Payment] Token webhook tidak valid', ['gateway' => $gateway->name(), 'order' => $order->kode_order]);
+
+                return response()->json(['message' => 'Token callback tidak valid.'], 401);
+            }
+
+            // Verifikasi ganda ke API gateway (sumber kebenaran).
+            $paid = $gateway->isPaidPayload($payload) && $gateway->confirmPaid($order);
+
+            if ($paid) {
+                $orders->markPaid($order, $payload, $gateway->name());
+                Log::info('[Payment] Webhook menandai order lunas', ['gateway' => $gateway->name(), 'order' => $order->kode_order]);
+            } else {
+                Log::info('[Payment] Webhook diabaikan', ['gateway' => $gateway->name(), 'order' => $order->kode_order]);
+            }
+
+            return response()->json(['message' => 'Callback diterima.']);
         }
 
-        $order = $this->resolveOrder($payload, $mayar);
-        if (! $order) {
-            return response()->json(['message' => 'Order tidak ditemukan untuk payload ini.'], 404);
-        }
-
-        $event = $mayar->extractEvent($payload);
-        $paidPayload = $mayar->isPaidPayload($payload);
-
-        // Verifikasi langsung ke API Mayar (sumber kebenaran) untuk payload lunas.
-        // Ini mencegah order ditandai lunas hanya karena event/status menyesatkan.
-        if ($paidPayload) {
-            $paidPayload = $mayar->confirmInvoicePaid($order);
-        }
-
-        if ($paidPayload) {
-            $orders->markPaid($order, $payload, 'mayar');
-            Log::info('[Mayar] Webhook menandai order lunas', ['order' => $order->kode_order, 'event' => $event]);
-        } else {
-            Log::info('[Mayar] Webhook diabaikan (bukan pembayaran diterima)', ['order' => $order->kode_order, 'event' => $event]);
-        }
-
-        return response()->json(['message' => 'Callback diterima.']);
+        return response()->json(['message' => 'Order tidak ditemukan untuk payload ini.'], 404);
     }
 
     /**
      * Simulasi pembayaran sukses (mode fake, untuk demo).
      */
-    public function fake(string $kodeOrder, MayarService $mayar, OrderService $orders)
+    public function fake(string $kodeOrder, OrderService $orders)
     {
         $order = Order::where('kode_order', $kodeOrder)->firstOrFail();
 
-        if ($mayar->isLive()) {
+        if ($this->manager->enabledGateways() && $this->allLive()) {
             return response()->json(['message' => 'Simulasi tidak tersedia pada mode live.'], 403);
         }
 
@@ -73,12 +89,17 @@ class PaymentController extends Controller
     }
 
     /**
-     * Cek status langsung ke Mayar lalu kembalikan order terbaru.
+     * Cek status langsung ke gateway lalu kembalikan order terbaru.
      */
-    public function sync(string $kodeOrder, MayarService $mayar, OrderService $orders)
+    public function sync(string $kodeOrder, OrderService $orders)
     {
         $order = Order::where('kode_order', $kodeOrder)->firstOrFail();
-        $mayar->syncPayment($order, $orders);
+
+        if ($order->isPending() && ($gateway = $this->manager->forOrder($order))) {
+            if ($gateway->confirmPaid($order)) {
+                $orders->markPaid($order, ['mode' => 'sync', 'status' => 'paid'], $gateway->name());
+            }
+        }
 
         return new OrderResource($order->fresh($orders->relations()));
     }
@@ -92,33 +113,17 @@ class PaymentController extends Controller
         return new OrderResource($order);
     }
 
-    private function resolveOrder(array $payload, MayarService $mayar): ?Order
+    private function allLive(): bool
     {
-        $kode = $mayar->extractOrderCode($payload);
-        if ($kode && ($order = Order::where('kode_order', $kode)->first())) {
-            return $order;
-        }
-
-        $invoiceId = $mayar->extractInvoiceId($payload);
-        if ($invoiceId) {
-            $payment = Payment::where('mayar_invoice_id', $invoiceId)->latest()->first();
-            if ($payment) {
-                return $payment->order;
+        foreach ($this->manager->enabledGateways() as $gateway) {
+            if (method_exists($gateway, 'isLive') && $gateway->isLive()) {
+                return true;
+            }
+            if ($gateway->name() === 'xendit' && $gateway->isEnabled()) {
+                return true;
             }
         }
 
-        // Fallback: cocokkan berdasarkan email pembeli + nominal.
-        $email = data_get($payload, 'data.customerEmail') ?? data_get($payload, 'customerEmail');
-        $amount = data_get($payload, 'data.amount') ?? data_get($payload, 'amount');
-
-        if ($email) {
-            return Order::where('email', $email)
-                ->where('status', 'pending')
-                ->when($amount, fn ($q, $v) => $q->where('total_harga', $v))
-                ->latest()
-                ->first();
-        }
-
-        return null;
+        return false;
     }
 }

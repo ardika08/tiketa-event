@@ -179,6 +179,47 @@ Produksi (cron):
 * * * * * cd /path/to/backend && php artisan schedule:run >> /dev/null 2>&1
 ```
 
+## Integrasi Pembayaran (Mayar + Xendit)
+
+Sistem mendukung **dua gateway dengan fallback otomatis**. Urutan diatur lewat
+`NONTIX_GATEWAYS` (default `mayar,xendit`):
+
+- Saat checkout, pembeli bisa memilih gateway (bila keduanya aktif).
+- Bila gateway pilihan gagal membuat transaksi, otomatis dicoba gateway berikutnya.
+- Bila tidak ada yang tersedia, checkout ditolak dengan pesan jelas (order dibatalkan).
+
+### Xendit (Payment Session v3)
+
+- `POST /sessions` mode `PAYMENT_LINK` → mengembalikan `payment_link_url`.
+- `GET /sessions/{id}` → verifikasi status (`COMPLETED` + `payment_id`) sebelum menandai lunas.
+- `POST /sessions/{id}/cancel` → menutup sesi saat order kadaluarsa.
+
+Aktifkan dengan mengisi `.env`:
+
+```env
+NONTIX_GATEWAYS=mayar,xendit
+XENDIT_BASE_URL=https://api.xendit.co
+XENDIT_SECRET_KEY=xnd_development_...   # test | xnd_production_... untuk live
+XENDIT_MODE=test                        # test | live
+XENDIT_WEBHOOK_TOKEN=token-rahasia
+```
+
+> Mode `live` mensyaratkan kunci `xnd_production_*` — kunci development otomatis
+> dianggap nonaktif di mode live.
+
+Daftarkan webhook di **Xendit Dashboard → Settings → Webhooks**:
+
+| Webhook | URL |
+| --- | --- |
+| Payment Session | `https://apitix.diamcreative.com/api/payments/callback` |
+
+Untuk verifikasi, set **Webhook Verification Token** di dashboard sama dengan
+`XENDIT_WEBHOOK_TOKEN`. Token dikirim lewat header `x-callback-token` dan
+diverifikasi (juga mendukung `?token=`).
+
+Event yang ditangani: `payment_session.completed` (lunas, diverifikasi ulang ke API)
+dan `payment_session.expired` (diabaikan — order tetap pending sampai expiry internal).
+
 ## Integrasi Pembayaran Mayar
 
 Implementasi mengikuti [Mayar Invoice API](https://docs.mayar.id/api-reference/invoice/create):

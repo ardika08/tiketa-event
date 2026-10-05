@@ -38,11 +38,31 @@ export default function Checkout() {
   const [pendingOrder, setPendingOrder] = useState(null)
   const [paying, setPaying] = useState(false)
   const [payError, setPayError] = useState(null)
+  const [gateways, setGateways] = useState([])
+  const [gateway, setGateway] = useState('')
 
   useEffect(() => {
     if (!event || items.length === 0) return
     updateDraft({ items, event, buyer: form, voucher })
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    publicApi
+      .gateways()
+      .then((res) => {
+        if (!active) return
+        const list = (res?.data || []).filter((g) => g.id !== 'fake')
+        setGateways(list)
+        // Pilih otomatis bila hanya ada satu gateway.
+        if (list.length === 1) setGateway(list[0].id)
+        else setGateway((prev) => prev || '')
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
   }, [])
 
   const subtotal = useMemo(() => items.reduce((s, it) => s + it.harga * it.jumlah, 0), [items])
@@ -117,6 +137,7 @@ export default function Checkout() {
       threads: form.threads || null,
       form_data: formData,
       voucher_code: voucher?.kode || null,
+      gateway: gateway || null,
       items: items.map((it) => ({ ticket_type_id: it.ticketId ?? it.id, jumlah: it.jumlah })),
     }
     try {
@@ -135,9 +156,12 @@ export default function Checkout() {
     if (!pendingOrder) return
     setPayError(null)
 
-    if (pendingOrder.payment_provider === 'mayar') {
+    const provider = pendingOrder.payment_provider
+    const hosted = provider === 'mayar' || provider === 'xendit'
+
+    if (hosted) {
       if (!pendingOrder.payment_url) {
-        setPayError('Link pembayaran Mayar belum tersedia. Coba beberapa saat lagi.')
+        setPayError(`Link pembayaran ${provider === 'xendit' ? 'Xendit' : 'Mayar'} belum tersedia. Coba beberapa saat lagi.`)
         return
       }
       window.location.href = pendingOrder.payment_url
@@ -268,6 +292,30 @@ export default function Checkout() {
                 <span className="font-bold text-brand-700">{formatRupiah(total)}</span>
               </div>
             </div>
+
+            {gateways.length > 1 && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Metode Pembayaran</p>
+                <div className="space-y-2">
+                  {gateways.map((g) => (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => setGateway(g.id)}
+                      className={`flex items-center justify-between rounded-xl border p-3 text-left text-sm font-semibold transition ${
+                        gateway === g.id ? 'border-brand-500 bg-brand-50 text-brand-700 ring-2 ring-brand-500/30' : 'border-slate-200 text-slate-600 hover:border-brand-300'
+                      }`}
+                    >
+                      {g.label}
+                      <span className={`grid h-4 w-4 place-items-center rounded-full border-2 ${gateway === g.id ? 'border-brand-600 bg-brand-600' : 'border-slate-300'}`}>
+                        {gateway === g.id && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <Button className="mt-5 w-full" size="lg" onClick={handleCheckout} disabled={submitting}>
               <TicketIcon size={18} /> Checkout
             </Button>
@@ -331,9 +379,9 @@ export default function Checkout() {
             {payError && <p className="text-sm font-medium text-rose-600">{payError}</p>}
 
             <p className="text-xs text-slate-400">
-              {pendingOrder.payment_provider === 'mayar'
-                ? 'Kamu akan diarahkan ke halaman pembayaran aman Mayar.'
-                : 'Mode demo: pesanan akan langsung ditandai lunas.'}
+              {pendingOrder.payment_provider === 'fake'
+                ? 'Mode demo: pesanan akan langsung ditandai lunas.'
+                : `Kamu akan diarahkan ke halaman pembayaran aman ${pendingOrder.payment_provider === 'xendit' ? 'Xendit' : 'Mayar'}.`}
             </p>
           </div>
         )}

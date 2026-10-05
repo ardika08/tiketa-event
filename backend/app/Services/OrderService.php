@@ -20,7 +20,7 @@ class OrderService
 {
     public function __construct(
         private VoucherService $vouchers,
-        private MayarService $mayar,
+        private PaymentManager $payments,
     ) {
     }
 
@@ -224,8 +224,8 @@ class OrderService
             $order->update(['status' => $status]);
         });
 
-        // Batalkan invoice Mayar (hanya berjalan pada mode live).
-        $this->mayar->voidInvoice($order);
+        // Batalkan transaksi di gateway yang dipakai order ini (bila live).
+        $this->payments->forOrder($order)?->voidPayment($order);
 
         return $order->fresh($this->relations());
     }

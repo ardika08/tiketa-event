@@ -35,6 +35,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Payment Gateway
+    |--------------------------------------------------------------------------
+    | Urutan gateway yang dicoba (fallback otomatis). Contoh: mayar,xendit
+    */
+    'gateways' => env('NONTIX_GATEWAYS', 'mayar,xendit'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Mayar Invoice API
     |--------------------------------------------------------------------------
     */
@@ -43,6 +51,18 @@ return [
         'api_key' => env('MAYAR_API_KEY'),
         'mode' => env('MAYAR_MODE', 'fake'), // fake | live
         'callback_token' => env('MAYAR_CALLBACK_TOKEN'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Xendit Payment Session v3
+    |--------------------------------------------------------------------------
+    */
+    'xendit' => [
+        'base_url' => env('XENDIT_BASE_URL', 'https://api.xendit.co'),
+        'secret_key' => env('XENDIT_SECRET_KEY'),
+        'mode' => env('XENDIT_MODE', 'test'), // test | live
+        'webhook_token' => env('XENDIT_WEBHOOK_TOKEN'),
     ],
 
     /*

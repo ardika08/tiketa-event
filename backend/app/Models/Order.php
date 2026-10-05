@@ -29,6 +29,7 @@ class Order extends Model
         'diskon',
         'total_harga',
         'biaya_layanan',
+        'gateway',
         'status',
         'batas_bayar',
         'paid_at',

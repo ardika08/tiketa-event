@@ -2,14 +2,92 @@
 
 namespace App\Services;
 
+use App\Contracts\PaymentGateway;
 use App\Enums\PaymentStatus;
 use App\Models\Order;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class MayarService
+class MayarService implements PaymentGateway
 {
+    public function name(): string
+    {
+        return 'mayar';
+    }
+
+    public function isEnabled(): bool
+    {
+        // Mode fake tetap "aktif" sebagai opsi demo; live butuh API key.
+        return $this->isLive() || config('nontix.mayar.mode') === 'fake';
+    }
+
+    public function createPayment(Order $order): Payment
+    {
+        return $this->createInvoice($order);
+    }
+
+    public function confirmPaid(Order $order): bool
+    {
+        return $this->confirmInvoicePaid($order);
+    }
+
+    public function voidPayment(Order $order): bool
+    {
+        return $this->voidInvoice($order);
+    }
+
+    public function isFailedPayload(array $payload): bool
+    {
+        $event = $this->extractEvent($payload);
+        if (str_contains($event, 'failed') || str_contains($event, 'cancel') || str_contains($event, 'expired')) {
+            return true;
+        }
+
+        $status = data_get($payload, 'data.status') ?? data_get($payload, 'status');
+        if (is_bool($status)) {
+            return $status === false;
+        }
+
+        return in_array(strtolower((string) $status), ['failed', 'cancelled', 'canceled', 'expired', 'gagal'], true);
+    }
+
+    public function resolveOrder(array $payload): ?Order
+    {
+        $kode = $this->extractOrderCode($payload);
+        if ($kode && ($order = Order::where('kode_order', $kode)->first())) {
+            return $order;
+        }
+
+        $invoiceId = $this->extractInvoiceId($payload);
+        if ($invoiceId) {
+            $payment = Payment::where('mayar_invoice_id', $invoiceId)->latest()->first()
+                ?? Payment::where('provider_reference', $invoiceId)->latest()->first();
+            if ($payment) {
+                return $payment->order;
+            }
+        }
+
+        // Fallback: cocokkan email + nominal untuk order pending tanpa gateway jelas.
+        $email = data_get($payload, 'data.customerEmail') ?? data_get($payload, 'customerEmail');
+        $amount = data_get($payload, 'data.amount') ?? data_get($payload, 'amount');
+
+        if ($email) {
+            return Order::where('email', $email)
+                ->where('status', 'pending')
+                ->when($amount, fn ($q, $v) => $q->where('total_harga', $v))
+                ->latest()
+                ->first();
+        }
+
+        return null;
+    }
+
+    public function verifyWebhook(array $payload, ?string $token): bool
+    {
+        return $this->verifyCallback($payload, $token);
+    }
+
     public function isLive(): bool
     {
         return config('nontix.mayar.mode') === 'live' && ! empty(config('nontix.mayar.api_key'));
@@ -35,9 +113,12 @@ class MayarService
         if (! $this->isLive()) {
             $payment->update([
                 'mayar_invoice_id' => 'FAKE-'.$order->kode_order,
+                'provider' => $this->name(),
                 'metode' => 'demo',
+                'payment_url' => $this->fakePaymentUrl($order),
                 'payload' => [
                     'mode' => 'fake',
+                    'provider' => $this->name(),
                     'payment_url' => $this->fakePaymentUrl($order),
                 ],
             ]);
@@ -92,14 +173,19 @@ class MayarService
         $data = $response->json() ?? [];
         $invoice = data_get($data, 'data', $data);
 
+        $url = data_get($invoice, 'link') ?? data_get($invoice, 'paymentUrl');
+
         $payment->update([
             'mayar_invoice_id' => data_get($invoice, 'id'),
+            'provider' => $this->name(),
             'metode' => 'mayar',
+            'payment_url' => $url,
             'payload' => [
                 'mode' => 'live',
+                'provider' => $this->name(),
                 'invoice_id' => data_get($invoice, 'id'),
                 'transaction_id' => data_get($invoice, 'transactionId'),
-                'payment_url' => data_get($invoice, 'link') ?? data_get($invoice, 'paymentUrl'),
+                'payment_url' => $url,
                 'expired_at' => data_get($invoice, 'expiredAt'),
                 'raw' => $data,
             ],

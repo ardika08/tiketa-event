@@ -44,6 +44,7 @@ Route::get('/orders/{kodeOrder}', [PublicOrderController::class, 'show']);
 Route::get('/tickets', [PublicTicketController::class, 'show']);
 Route::post('/tickets/resend', [PublicTicketController::class, 'resend']);
 
+Route::get('/payments/gateways', [PublicPaymentController::class, 'gateways']);
 Route::post('/payments/callback', [PublicPaymentController::class, 'callback']);
 Route::get('/payments/{kodeOrder}/status', [PublicPaymentController::class, 'status']);
 Route::get('/payments/{kodeOrder}/sync', [PublicPaymentController::class, 'sync']);

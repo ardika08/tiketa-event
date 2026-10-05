@@ -122,6 +122,7 @@ export const publicApi = {
   payFake: (kode) => api.get(`/payments/${kode}/fake`, { auth: false }),
   paymentStatus: (kode) => api.get(`/payments/${kode}/status`, { auth: false }),
   syncPayment: (kode) => api.get(`/payments/${kode}/sync`, { auth: false }),
+  gateways: () => api.get('/payments/gateways', { auth: false }),
 }
 
 export const partnerApi = {

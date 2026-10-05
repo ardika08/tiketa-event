@@ -14,6 +14,9 @@ class Payment extends Model
     protected $fillable = [
         'order_id',
         'mayar_invoice_id',
+        'provider',
+        'provider_reference',
+        'payment_url',
         'metode',
         'jumlah',
         'status',
