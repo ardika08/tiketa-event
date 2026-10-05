@@ -105,7 +105,7 @@ export default function MasterSeatPlan() {
             </div>
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
               {gambar ? (
-                <img src={gambar} alt="Denah" className="h-52 w-full object-cover" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
+                <img key={gambar} src={gambar} alt="Denah" className="h-52 w-full object-cover" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
               ) : (
                 <div className="grid h-40 place-items-center text-sm text-slate-400">Belum ada gambar denah</div>
               )}

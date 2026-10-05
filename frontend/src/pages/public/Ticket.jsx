@@ -73,7 +73,7 @@ export default function Ticket() {
               <div className="mb-4 flex items-center gap-3 rounded-xl bg-slate-50 p-3">
                 <div className="h-14 w-20 shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-brand-500 to-accent-500">
                   {t.gambar_url ? (
-                    <img src={t.gambar_url} alt={t.nama_tiket} className="h-full w-full object-cover" loading="lazy" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
+                    <img key={t.gambar_url} src={t.gambar_url} alt={t.nama_tiket} className="h-full w-full object-cover" loading="lazy" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
                   ) : (
                     <div className="grid h-full w-full place-items-center text-white/80"><TicketIcon size={20} /></div>
                   )}

@@ -105,7 +105,7 @@ export default function MasterTickets() {
                       <div className="flex items-center gap-2.5">
                         <span className="grid h-10 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-brand-100 text-brand-700">
                           {t.gambar_url ? (
-                            <img src={t.gambar_url} alt={t.nama_tiket} className="h-full w-full object-cover" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
+                            <img key={t.gambar_url} src={t.gambar_url} alt={t.nama_tiket} className="h-full w-full object-cover" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
                           ) : (
                             <TicketIcon size={15} />
                           )}

@@ -547,7 +547,7 @@ export default function EventForm() {
               </Field>
               <div className="overflow-hidden rounded-2xl border border-slate-200">
                 {denah.gambar_url ? (
-                  <img src={denah.gambar_url} alt="Pratinjau denah" className="h-40 w-full object-cover" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
+                  <img key={denah.gambar_url} src={denah.gambar_url} alt="Pratinjau denah" className="h-40 w-full object-cover" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
                 ) : (
                   <div className="grid h-40 place-items-center text-sm text-slate-400">Belum ada gambar denah</div>
                 )}

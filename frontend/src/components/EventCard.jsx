@@ -7,6 +7,7 @@ export function EventImage({ src, alt, className }) {
   return (
     <div className={cn('relative overflow-hidden bg-gradient-to-br from-brand-600 to-accent-500', className)}>
       <img
+        key={src}
         src={src}
         alt={alt}
         loading="lazy"

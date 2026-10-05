@@ -70,7 +70,7 @@ export default function MasterEvents() {
             return (
               <Card key={e.id} className="flex gap-4 p-4">
                 <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-brand-600 to-accent-500">
-                  <img src={e.hero_image_url} alt={e.nama_event} className="h-full w-full object-cover" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
+                  <img key={e.hero_image_url} src={e.hero_image_url} alt={e.nama_event} className="h-full w-full object-cover" onError={(ev) => { ev.currentTarget.style.display = 'none' }} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
