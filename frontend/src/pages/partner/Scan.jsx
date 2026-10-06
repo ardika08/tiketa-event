@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
-import { QrCode, ScanLine, CheckCircle2, XCircle, AlertTriangle, RotateCcw, CalendarDays } from 'lucide-react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
+import { QrCode, ScanLine, CheckCircle2, XCircle, AlertTriangle, RotateCcw, CalendarDays, Camera, Loader2 } from 'lucide-react'
 import { Button, Card, Input, PageHeader, Badge, Select } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatTanggal, cn } from '../../lib/utils'
 
+// html5-qrcode (±340KB) hanya diunduh saat petugas benar-benar membuka scanner.
+const QrScannerModal = lazy(() => import('../../components/QrScannerModal'))
+
 const RESULT_STYLE = {
   valid: { bg: 'from-emerald-500 to-teal-600', icon: CheckCircle2, label: 'Berhasil' },
   used: { bg: 'from-amber-500 to-orange-600', icon: AlertTriangle, label: 'Sudah Dipakai' },
   wrong_session: { bg: 'from-amber-500 to-orange-600', icon: AlertTriangle, label: 'Sesi Tidak Cocok' },
+  unpaid: { bg: 'from-amber-500 to-orange-600', icon: AlertTriangle, label: 'Belum Lunas' },
   invalid: { bg: 'from-rose-500 to-red-600', icon: XCircle, label: 'Gagal' },
 }
 
@@ -36,14 +40,25 @@ export default function Scan() {
   const [result, setResult] = useState(null)
   const [history, setHistory] = useState([])
   const [scanning, setScanning] = useState(false)
+  const [cameraOpen, setCameraOpen] = useState(false)
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
   const hadirSesi = activeSession?.total_hadir ?? 0
   const totalSesi = activeSession?.total_pass ?? 0
 
-  const handleScan = async (value = code) => {
-    const kode = value.trim().toUpperCase()
-    if (!kode || !eventId || !activeSessionId) return
+  /**
+   * Kirim kode QR ke backend. Mengembalikan objek hasil agar bisa
+   * ditampilkan sebagai overlay di dalam modal kamera.
+   */
+  const submitScan = useCallback(async (rawCode) => {
+    const kode = String(rawCode || '').trim().toUpperCase()
+    if (!kode) return null
+    if (!eventId || !activeSessionId) {
+      const res = { status: 'invalid', message: 'Pilih event dan sesi terlebih dahulu.', ticket: null }
+      setResult(res)
+      return res
+    }
+
     setScanning(true)
     try {
       const res = await partnerApi.scan({ event_id: eventId, session_id: activeSessionId, kode_qr: kode })
@@ -52,12 +67,26 @@ export default function Scan() {
         setHistory((h) => [{ kode, ...res, session_label: activeSession?.label, waktu: new Date().toISOString() }, ...h])
         reload()
       }
+      return res
     } catch (err) {
-      setResult({ status: 'invalid', message: err.message, ticket: null })
+      const res = { status: 'invalid', message: err.message, ticket: null }
+      setResult(res)
+      return res
     } finally {
-      setCode('')
       setScanning(false)
     }
+  }, [eventId, activeSessionId, activeSession, reload])
+
+  const handleManualScan = () => {
+    const value = code
+    setCode('')
+    submitScan(value)
+  }
+
+  const openCamera = () => {
+    if (!activeSessionId) return
+    setResult(null)
+    setCameraOpen(true)
   }
 
   const reset = () => setResult(null)
@@ -134,16 +163,34 @@ export default function Scan() {
             )}
           </div>
           <div className="p-5">
+            <Button
+              size="lg"
+              className="w-full"
+              onClick={openCamera}
+              disabled={!activeSessionId}
+            >
+              <Camera size={18} /> Buka Scanner Kamera
+            </Button>
+            <p className="mt-2 text-center text-xs text-slate-400">
+              Bekerja di HP, tablet, maupun webcam laptop/PC. Beberapa petugas bisa memindai bersamaan.
+            </p>
+
+            <div className="my-4 flex items-center gap-3">
+              <span className="h-px flex-1 bg-slate-200" />
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">atau input manual</span>
+              <span className="h-px flex-1 bg-slate-200" />
+            </div>
+
             <div className="flex gap-2">
               <Input
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleScan()}
+                onKeyDown={(e) => e.key === 'Enter' && handleManualScan()}
                 placeholder="Masukkan kode QR..."
                 className="font-mono"
                 disabled={!activeSessionId}
               />
-              <Button onClick={() => handleScan()} disabled={scanning || !activeSessionId}><QrCode size={16} /> Scan</Button>
+              <Button onClick={handleManualScan} disabled={scanning || !activeSessionId}><QrCode size={16} /> Scan</Button>
             </div>
             <p className="mt-3 text-xs text-slate-400">Masukkan kode QR dari e-ticket pembeli (format: Q7K2-9PLM-3XQ8).</p>
             {result && <Button variant="secondary" className="mt-4 w-full" onClick={reset}><RotateCcw size={15} /> Scan Lagi</Button>}
@@ -176,6 +223,26 @@ export default function Scan() {
           )}
         </Card>
       </div>
+
+      <Suspense
+        fallback={cameraOpen ? (
+          <div className="fixed inset-0 z-[60] grid place-items-center bg-slate-950 text-white">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 size={30} className="animate-spin" />
+              <p className="text-sm font-medium">Menyiapkan scanner…</p>
+            </div>
+          </div>
+        ) : null}
+      >
+        <QrScannerModal
+          open={cameraOpen}
+          onClose={() => setCameraOpen(false)}
+          onDecoded={submitScan}
+          subtitle="Arahkan kamera ke QR code tiket"
+          counter={`${hadirSesi}/${totalSesi} check-in`}
+          footerInfo={activeSession ? `Sesi aktif: ${activeSession.label} · ${activeSession.nama_session}` : 'Pilih sesi terlebih dahulu.'}
+        />
+      </Suspense>
     </div>
   )
 }

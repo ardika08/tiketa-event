@@ -147,6 +147,42 @@ h5 {
   }
 }
 
+/* ---------- QR Scanner (html5-qrcode) ---------- */
+
+@keyframes scanline {
+  0% {
+    top: 2%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    top: 96%;
+    opacity: 0;
+  }
+}
+
+/* Video kamera harus memenuhi area viewfinder tanpa distorsi */
+#nontix-qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+#nontix-qr-reader canvas {
+  display: none !important;
+}
+
+/* Kotak pindai bawaan library: hilangkan border agar tidak dobel dengan reticle kita */
+#nontix-qr-reader #qr-shaded-region {
+  border-width: 0 !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .hero-event__content {
     animation: none;
