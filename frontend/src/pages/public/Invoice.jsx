@@ -5,6 +5,7 @@ import { Button, Card, Badge, EmptyState } from '../../components/ui'
 import { groupItemsBySession } from '../../data/mock'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
 import { useOrder } from '../../context/OrderContext'
+import { paymentProviderLabel } from '../../lib/paymentProvider'
 
 export default function Invoice() {
   const { order, refreshOrder } = useOrder()
@@ -72,7 +73,7 @@ export default function Invoice() {
           <div className="sm:text-right">
             <p className="text-xs font-semibold uppercase text-slate-400">Detail</p>
             <p className="mt-1 text-sm text-slate-600">Tanggal: {formatTanggal(order.created_at)}</p>
-            <p className="text-sm text-slate-600">Metode: {order.metode?.nama || 'Mayar'}</p>
+            <p className="text-sm text-slate-600">Metode: {order.metode?.nama || paymentProviderLabel(order.payment_provider) || 'Online'}</p>
           </div>
         </div>
 

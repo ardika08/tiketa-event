@@ -3,6 +3,8 @@
  * dipakai komponen frontend.
  */
 
+import { paymentProviderLabel } from './paymentProvider'
+
 export function normalizeTicketType(t) {
   if (!t) return t
   const sessionIds = Array.isArray(t.session_ids)
@@ -75,6 +77,10 @@ export function normalizeOrder(o) {
     total_harga: Number(o.total_harga ?? o.total ?? 0),
     biaya_layanan: Number(o.biaya_layanan ?? 0),
     jumlah_tiket: tickets.length || items.reduce((sum, it) => sum + it.jumlah, 0),
-    metode: o.metode || (o.payment_status ? { nama: 'Mayar' } : null),
+    metode:
+      o.metode ||
+      (o.payment_status
+        ? { nama: paymentProviderLabel(o.payment_provider) || 'Online' }
+        : null),
   }
 }

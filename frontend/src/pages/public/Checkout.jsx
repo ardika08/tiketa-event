@@ -6,6 +6,7 @@ import { groupItemsBySession } from '../../data/mock'
 import { publicApi } from '../../lib/api'
 import { formatRupiah, formatTanggal, cn } from '../../lib/utils'
 import { useOrder } from '../../context/OrderContext'
+import { paymentProviderLabel, isHostedProvider } from '../../lib/paymentProvider'
 
 const STANDARD_SOCIAL = ['instagram', 'tiktok', 'threads']
 const DEFAULT_FIELDS = [
@@ -205,11 +206,11 @@ export default function Checkout() {
     setPayError(null)
 
     const provider = pendingOrder.payment_provider
-    const hosted = provider === 'mayar' || provider === 'xendit'
+    const hosted = isHostedProvider(provider)
 
     if (hosted) {
       if (!pendingOrder.payment_url) {
-        setPayError(`Link pembayaran ${provider === 'xendit' ? 'Xendit' : 'Mayar'} belum tersedia. Coba beberapa saat lagi.`)
+        setPayError(`Link pembayaran ${paymentProviderLabel(provider) ?? 'penyedia pembayaran'} belum tersedia. Coba beberapa saat lagi.`)
         return
       }
       window.location.href = pendingOrder.payment_url
@@ -428,9 +429,9 @@ export default function Checkout() {
             {payError && <p className="text-sm font-medium text-rose-600">{payError}</p>}
 
             <p className="text-xs text-slate-400">
-              {pendingOrder.payment_provider === 'fake'
-                ? 'Mode demo: pesanan akan langsung ditandai lunas.'
-                : `Kamu akan diarahkan ke halaman pembayaran aman ${pendingOrder.payment_provider === 'xendit' ? 'Xendit' : 'Mayar'}.`}
+              {isHostedProvider(pendingOrder.payment_provider)
+                ? `Kamu akan diarahkan ke halaman pembayaran aman ${paymentProviderLabel(pendingOrder.payment_provider)}.`
+                : 'Mode demo: pesanan akan langsung ditandai lunas.'}
             </p>
           </div>
         )}

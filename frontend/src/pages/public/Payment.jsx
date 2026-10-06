@@ -6,6 +6,7 @@ import { PAYMENT_METHODS } from '../../lib/constants'
 import { groupItemsBySession } from '../../data/mock'
 import { formatRupiah, formatTanggal, cn, pad } from '../../lib/utils'
 import { useOrder } from '../../context/OrderContext'
+import { paymentProviderLabel, isHostedProvider } from '../../lib/paymentProvider'
 
 export default function Payment() {
   const { order, markPaid } = useOrder()
@@ -35,6 +36,7 @@ export default function Payment() {
     )
   }
 
+  const providerLabel = paymentProviderLabel(order.payment_provider)
   const sisa = Math.max(new Date(order.batas_bayar).getTime() - now, 0)
   const kadaluarsa = sisa <= 0
   const jam = Math.floor(sisa / 3600000)
@@ -52,12 +54,12 @@ export default function Payment() {
     if (!selected) return
     setPayError(null)
 
-    if (order?.payment_provider === 'mayar') {
+    // Gateway hosted (Xendit/Mayar): pembeli menyelesaikan pembayaran di halaman provider.
+    if (isHostedProvider(order?.payment_provider)) {
       if (!order?.payment_url) {
-        setPayError('Link pembayaran Mayar belum tersedia. Coba beberapa saat lagi.')
+        setPayError(`Link pembayaran ${paymentProviderLabel(order.payment_provider)} belum tersedia. Coba beberapa saat lagi.`)
         return
       }
-      // Alihkan ke halaman pembayaran Mayar.
       window.location.href = order.payment_url
       return
     }
@@ -144,7 +146,7 @@ export default function Payment() {
             <div className="flex items-start gap-3">
               <ShieldCheck className="mt-0.5 shrink-0 text-emerald-600" size={20} />
               <p className="text-sm text-slate-600">
-                Pembayaran diproses aman melalui <span className="font-semibold">Mayar Invoice API</span>. Status pesanan ter-update otomatis setelah pembayaran berhasil.
+                Pembayaran diproses aman melalui <span className="font-semibold">{providerLabel ?? 'halaman pembayaran aman'}</span>. Status pesanan ter-update otomatis setelah pembayaran berhasil.
               </p>
             </div>
           </Card>
@@ -197,8 +199,8 @@ export default function Payment() {
             {!selected && !kadaluarsa && <p className="mt-2 text-center text-xs text-slate-400">Pilih metode bayar dulu</p>}
             {payError && <p className="mt-2 text-center text-xs font-medium text-rose-600">{payError}</p>}
             <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400">
-              {order.payment_provider === 'mayar' ? (
-                <><Badge color="brand">Mayar</Badge> kamu akan diarahkan ke halaman pembayaran aman</>
+              {providerLabel ? (
+                <><Badge color="brand">{providerLabel}</Badge> kamu akan diarahkan ke halaman pembayaran aman</>
               ) : (
                 <><Badge color="slate">Demo</Badge> tombol bayar akan menandai pesanan lunas</>
               )}

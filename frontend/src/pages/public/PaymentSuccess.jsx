@@ -5,12 +5,14 @@ import { Button, Card, Badge } from '../../components/ui'
 import { publicApi } from '../../lib/api'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
 import { useOrder } from '../../context/OrderContext'
+import { paymentProviderLabel } from '../../lib/paymentProvider'
 
 export default function PaymentSuccess() {
   const { order, refreshOrder } = useOrder()
   const [params] = useSearchParams()
   const kode = params.get('order')
   const [checking, setChecking] = useState(true)
+  const providerLabel = paymentProviderLabel(order?.payment_provider)
 
   useEffect(() => {
     let active = true
@@ -24,7 +26,7 @@ export default function PaymentSuccess() {
           current = await refreshOrder(kode)
         }
 
-        // Coba rekonsiliasi status langsung ke Mayar.
+        // Coba rekonsiliasi status langsung ke gateway pembayaran.
         if (current?.status === 'pending') {
           try {
             await publicApi.syncPayment(current.kode_order)
@@ -104,7 +106,9 @@ export default function PaymentSuccess() {
               </Button>
             </div>
             <p className="mt-3 text-center text-xs text-slate-400">
-              Status akan otomatis diperbarui setelah pembayaran diterima Mayar.
+              {providerLabel
+                ? `Status akan otomatis diperbarui setelah pembayaran diterima ${providerLabel}.`
+                : 'Status akan otomatis diperbarui setelah pembayaran terkonfirmasi.'}
             </p>
           </div>
         </Card>
