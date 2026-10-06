@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Printer, ArrowLeft, Info } from 'lucide-react'
 import { Button, Card, Badge, EmptyState } from '../../components/ui'
 import { groupItemsBySession } from '../../data/mock'
@@ -8,9 +8,15 @@ import { useOrder } from '../../context/OrderContext'
 
 export default function Invoice() {
   const { order, refreshOrder } = useOrder()
+  const [searchParams] = useSearchParams()
 
   useEffect(() => {
-    if (!order) refreshOrder().catch(() => {})
+    const kode = searchParams.get('kode')
+    if (kode) {
+      refreshOrder(kode).catch(() => {})
+    } else if (!order) {
+      refreshOrder().catch(() => {})
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

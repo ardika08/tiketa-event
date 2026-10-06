@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Ticket as TicketIcon, MapPin, CalendarDays, Download, RefreshCw, Info, Layers } from 'lucide-react'
 import { Button, Card, Badge, EmptyState } from '../../components/ui'
 import { formatTanggal } from '../../lib/utils'
@@ -25,9 +25,15 @@ function QrPlaceholder({ value, size = 120 }) {
 
 export default function Ticket() {
   const { order, refreshOrder } = useOrder()
+  const [searchParams] = useSearchParams()
 
   useEffect(() => {
-    if (!order) refreshOrder().catch(() => {})
+    const kode = searchParams.get('kode')
+    if (kode) {
+      refreshOrder(kode).catch(() => {})
+    } else if (!order) {
+      refreshOrder().catch(() => {})
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

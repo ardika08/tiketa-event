@@ -53,6 +53,7 @@ export function OrderProvider({ children }) {
     const res = await publicApi.order(target)
     const normalized = normalizeOrder(res.data)
     setOrder(normalized)
+    if (normalized?.kode_order) localStorage.setItem(LAST_KEY, normalized.kode_order)
     return normalized
   }, [order])
 
