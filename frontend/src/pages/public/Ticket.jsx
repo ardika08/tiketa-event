@@ -125,6 +125,8 @@ export default function Ticket() {
     )
   }
 
+  const jumlahTiket = order.tickets?.length || order.jumlah_tiket || 0
+
   return (
     <div className="container-page max-w-md py-6 sm:py-8">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -135,6 +137,19 @@ export default function Ticket() {
         <Link to="/tiket/kirim-ulang">
           <Button variant="secondary" size="sm" className="h-8 text-xs shrink-0"><RefreshCw size={13} /> Kirim Ulang</Button>
         </Link>
+      </div>
+
+      {/* Jumlah e-tiket yang dibeli pada pesanan ini */}
+      <div className="mb-4 flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+          <Layers size={17} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-base font-bold leading-tight text-slate-900">
+            <span className="text-brand-700">{jumlahTiket}</span> E-Ticket
+          </p>
+          <p className="truncate text-[11px] text-slate-500">Pesanan {order.kode_order}</p>
+        </div>
       </div>
 
       <div className="space-y-5">
