@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, BadgePercent, Check, Ticket as TicketIcon, Info, Layers } from 'lucide-react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, BadgePercent, Check, Ticket as TicketIcon, Info, Layers, FormInput } from 'lucide-react'
 import { Button, Card, Field, Input, Badge, EmptyState, Modal } from '../../components/ui'
 import { groupItemsBySession } from '../../data/mock'
 import { publicApi } from '../../lib/api'
@@ -14,17 +14,53 @@ const DEFAULT_FIELDS = [
   { id: 'threads', label: 'Threads', key: 'threads', tipe: 'sosial', wajib: false },
 ]
 
+/**
+ * Kunci unik untuk jawaban field: field khusus tiket di-namespace per field
+ * (mis. `f_12`) supaya dua tiket dengan field bernama sama tidak bertabrakan.
+ */
+function formFieldKey(f) {
+  return f.ticket_type_id ? `f_${f.id}` : (f.key || String(f.label).toLowerCase())
+}
+
+/** Validasi field wajib: global selalu, field khusus tiket hanya jika tiketnya ada di cart. */
+function collectFieldErrors(allFields, form, cartTicketIds, errors) {
+  for (const f of allFields) {
+    const inCart = !f.ticket_type_id || cartTicketIds.has(Number(f.ticket_type_id))
+    if (inCart && f.wajib && !String(form[formFieldKey(f)] || '').trim()) {
+      errors[formFieldKey(f)] = `${f.label} wajib diisi`
+    }
+  }
+  return errors
+}
+
 export default function Checkout() {
   const { state } = useLocation()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { draft, updateDraft, createOrder, markPaid } = useOrder()
 
-  const event = state?.event || draft?.event
+  const event = state?.event || draft?.event || searchParams.get('event') || null
   const items = state?.items || draft?.items || []
   const itemGroups = groupItemsBySession(event, items)
-  const customFields = event?.formFields?.length
-    ? event.formFields.map((f) => ({ ...f, key: f.key || f.label.toLowerCase() }))
+  const eventFields = (event?.formFields || []).filter((f) => f.status !== 'nonaktif')
+  const allFields = eventFields.length
+    ? eventFields.map((f) => ({ ...f, key: f.key || f.label.toLowerCase() }))
     : DEFAULT_FIELDS
+  // Field order-level: tanpa scope tiket. Field sisanya muncul per grup jenis tiket.
+  const globalFields = allFields.filter((f) => !f.ticket_type_id)
+  const groupFieldsFor = (sessionItems) => {
+    const seen = new Set()
+    const out = []
+    for (const it of sessionItems) {
+      for (const f of allFields) {
+        if (f.ticket_type_id && Number(f.ticket_type_id) === Number(it.ticketId ?? it.id) && !seen.has(f.id)) {
+          seen.add(f.id)
+          out.push(f)
+        }
+      }
+    }
+    return out
+  }
 
   const [form, setForm] = useState({
     nama: '', email: '', whatsapp: '', instagram: '', tiktok: '', threads: '',
@@ -75,9 +111,7 @@ export default function Checkout() {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Format email tidak valid'
     if (!form.whatsapp.trim()) e.whatsapp = 'Nomor WhatsApp wajib diisi'
     else if (!/^[0-9+\-\s]{8,16}$/.test(form.whatsapp)) e.whatsapp = 'Format WhatsApp tidak valid'
-    customFields.forEach((f) => {
-      if (f.wajib && !String(form[f.key] || '').trim()) e[f.key] = `${f.label} wajib diisi`
-    })
+    collectFieldErrors(allFields, form, new Set(items.map((it) => Number(it.ticketId ?? it.id))), e)
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -104,9 +138,22 @@ export default function Checkout() {
   const handleCheckout = async () => {
     if (!validate()) return
     updateDraft({ items, event, buyer: form, voucher })
-    const formData = customFields
-      .filter((f) => !STANDARD_SOCIAL.includes(f.key))
-      .reduce((acc, f) => ({ ...acc, [f.key]: form[f.key] || '' }), {})
+    const cartTicketIds = new Set(items.map((it) => Number(it.ticketId ?? it.id)))
+    const relevantFields = allFields.filter((f) => !f.ticket_type_id || cartTicketIds.has(Number(f.ticket_type_id)))
+    const orderLevel = {}
+    const perTicket = {}
+    for (const f of relevantFields) {
+      if (STANDARD_SOCIAL.includes(f.key) && !f.ticket_type_id) continue
+      const value = form[formFieldKey(f)] || ''
+      if (f.ticket_type_id) {
+        perTicket[String(f.ticket_type_id)] = { ...(perTicket[String(f.ticket_type_id)] || {}), [f.label]: value }
+      } else {
+        orderLevel[f.label] = value
+      }
+    }
+    const formData = {}
+    if (Object.keys(orderLevel).length) formData.order = orderLevel
+    if (Object.keys(perTicket).length) formData.tickets = perTicket
     const payload = {
       event_id: event.id,
       nama: form.nama,
@@ -181,12 +228,13 @@ export default function Checkout() {
               <Field label="Nomor WhatsApp" required error={errors.whatsapp}>
                 <Input value={form.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} placeholder="08xxxxxxxxxx" />
               </Field>
-              {customFields.map((f) => (
-                <Field key={f.id || f.key} label={f.label} required={f.wajib} error={errors[f.key]} hint={f.wajib ? undefined : 'Opsional'}>
+              {globalFields.map((f) => (
+                <Field key={formFieldKey(f)} label={f.label} required={f.wajib} error={errors[formFieldKey(f)]} hint={f.wajib ? undefined : 'Opsional'}>
                   <Input
-                    value={form[f.key] || ''}
-                    onChange={(e) => set(f.key, e.target.value)}
-                    placeholder={`@${f.key}`}
+                    type={f.tipe === 'nomor' ? 'number' : f.tipe === 'email' ? 'email' : 'text'}
+                    value={form[formFieldKey(f)] || ''}
+                    onChange={(e) => set(formFieldKey(f), e.target.value)}
+                    placeholder={f.tipe === 'sosial' ? `@${f.key || ''}` : `Isi ${f.label}`}
                   />
                 </Field>
               ))}
@@ -252,6 +300,23 @@ export default function Checkout() {
                       <p className="font-semibold text-slate-800">{formatRupiah(it.harga * it.jumlah)}</p>
                     </div>
                   ))}
+                  {groupFieldsFor(sessionItems).length > 0 && (
+                    <div className="space-y-3 rounded-[var(--radius-control)] bg-brand-50 p-3 ring-1 ring-brand-100">
+                      <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-brand-700">
+                        <FormInput size={14} /> Data tambahan tiket ini
+                      </p>
+                      {groupFieldsFor(sessionItems).map((f) => (
+                        <Field key={formFieldKey(f)} label={f.label} required={f.wajib} error={errors[formFieldKey(f)]} hint={f.wajib ? undefined : 'Opsional'}>
+                          <Input
+                            type={f.tipe === 'nomor' ? 'number' : f.tipe === 'email' ? 'email' : 'text'}
+                            value={form[formFieldKey(f)] || ''}
+                            onChange={(e) => set(formFieldKey(f), e.target.value)}
+                            placeholder={f.tipe === 'sosial' ? `@${f.key || ''}` : `Isi ${f.label}`}
+                          />
+                        </Field>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
