@@ -194,6 +194,10 @@ class ReportService
                 'instagram' => $order->instagram,
                 'tiktok' => $order->tiktok,
                 'threads' => $order->threads,
+                'form_data' => $order->form_data,
+                'ticket_names' => $order->items->mapWithKeys(
+                    fn ($i) => [(string) $i->ticket_type_id => $i->ticketType?->nama_tiket]
+                )->all(),
                 'event' => $order->event?->nama_event,
                 'tiket' => $order->items->map(fn ($i) => $i->ticketType?->nama_tiket.' x'.$i->jumlah)->implode(', '),
                 'jumlah' => $order->items->sum('jumlah'),

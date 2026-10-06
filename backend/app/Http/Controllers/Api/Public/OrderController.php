@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\OrderResource;
 use App\Models\Event;
+use App\Models\FormField;
 use App\Models\Order;
 use App\Services\OrderService;
 use App\Services\PaymentManager;
@@ -31,6 +32,45 @@ class OrderController extends Controller
         ]);
 
         $event = Event::active()->findOrFail($data['event_id']);
+
+        // Validasi server-side field form custom: field berstatus wajib tidak
+        // boleh dikosongkan (juga lewat API mentah). Field khusus jenis tiket
+        // hanya divalidasi bila tiket tersebut benar-benar dipesan.
+        $fields = FormField::query()
+            ->where('status', 'aktif')
+            ->where(function ($q) use ($event) {
+                $q->where('event_id', $event->id)
+                    ->orWhere(function ($qq) use ($event) {
+                        $qq->whereNull('event_id')->where('organizer_id', $event->organizer_id);
+                    });
+            })
+            ->get();
+
+        $orderedTicketIds = collect($data['items'])
+            ->pluck('ticket_type_id')
+            ->map(fn ($id) => (int) $id);
+        $orderAnswers = $data['form_data']['order'] ?? [];
+        $ticketAnswers = $data['form_data']['tickets'] ?? [];
+        $fieldErrors = [];
+
+        foreach ($fields as $field) {
+            if ($field->ticket_type_id && ! $orderedTicketIds->contains((int) $field->ticket_type_id)) {
+                continue;
+            }
+
+            $answers = $field->ticket_type_id
+                ? ($ticketAnswers[(string) $field->ticket_type_id] ?? [])
+                : $orderAnswers;
+            $value = $answers[$field->label] ?? null;
+
+            if ($field->wajib && ($value === null || trim((string) $value) === '')) {
+                $fieldErrors["form_data.{$field->id}"] = "{$field->label} wajib diisi.";
+            }
+        }
+
+        if ($fieldErrors) {
+            throw ValidationException::withMessages($fieldErrors);
+        }
 
         $order = $orders->create(
             $event,

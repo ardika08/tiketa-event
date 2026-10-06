@@ -36,6 +36,7 @@ class EventController extends Controller
         // organizer ini — digabung dengan field spesifik event, urut sesuai `urutan`.
         $organizerFields = FormField::where('organizer_id', $event->organizer_id)
             ->whereNull('event_id')
+            ->whereNull('ticket_type_id') // field khusus tiket tidak relevan di level organizer
             ->where('status', 'aktif')
             ->orderBy('urutan')
             ->get();
