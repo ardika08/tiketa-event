@@ -74,13 +74,16 @@ class XenditService implements PaymentGateway
             'country' => 'ID',
             'description' => 'Order '.$order->kode_order.' - '.$order->event->nama_event,
             'customer' => array_filter([
-                'reference_id' => $order->email,
+                // WAJIB unik sepanjang masa di Xendit. Email pernah dipakai → 409
+                // DUPLICATE_ERROR untuk SEMUA order berikutnya dari pembeli yang sama.
+                // kode_order unik per order, jadi selalu aman.
+                'reference_id' => $order->kode_order,
                 'type' => 'INDIVIDUAL',
                 'email' => $order->email,
-                'mobile_number' => $order->whatsapp,
-                'individual_detail' => [
+                'mobile_number' => $this->formatPhone($order->whatsapp),
+                'individual_detail' => array_filter([
                     'given_names' => $order->nama_pembeli,
-                ],
+                ]),
             ]),
             'items' => [[
                 'reference_id' => $order->kode_order,
@@ -293,6 +296,27 @@ class XenditService implements PaymentGateway
         return $kind === 'success'
             ? $base.'/pembayaran/berhasil?order='.$order->kode_order
             : $base.'/pembayaran?order='.$order->kode_order;
+    }
+
+    private function formatPhone(?string $phone): ?string
+    {
+        if (! $phone) {
+            return null;
+        }
+
+        $clean = preg_replace('/[^0-9]/', '', $phone);
+        if ($clean === '') {
+            return null;
+        }
+
+        if (str_starts_with($clean, '0')) {
+            return '+62'.substr($clean, 1);
+        }
+        if (str_starts_with($clean, '62')) {
+            return '+'.$clean;
+        }
+
+        return '+'.$clean;
     }
 
     private function fakePaymentUrl(Order $order): string
