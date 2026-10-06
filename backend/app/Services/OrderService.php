@@ -231,13 +231,19 @@ class OrderService
     }
 
     /**
-     * Batalkan semua order pending yang melewati batas bayar.
+     * Batalkan semua order pending yang melewati batas bayar + masa tenggang.
+     *
+     * Masa tenggang (nontix.expiry_grace_minutes) mencegah order dibatalkan
+     * tepat saat pembeli menyelesaikan bayar di detik-detik terakhir, sementara
+     * webhook gateway baru sampai setelahnya (uang masuk tapi tiket tak terbit).
      */
     public function expireOverdue(): int
     {
+        $grace = max(0, (int) config('nontix.expiry_grace_minutes'));
+
         $count = 0;
 
-        Order::expired()->with('items')->chunkById(100, function ($orders) use (&$count) {
+        Order::expired($grace)->with('items')->chunkById(100, function ($orders) use (&$count) {
             foreach ($orders as $order) {
                 $this->cancel($order, OrderStatus::EXPIRED);
                 $count++;

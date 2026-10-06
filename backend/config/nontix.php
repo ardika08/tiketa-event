@@ -19,6 +19,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Masa tenggang pembatalan order (menit)
+    |--------------------------------------------------------------------------
+    | Order pending baru dibatalkan setelah batas_bayar + nilai ini. Tujuannya
+    | menangkap pembayaran yang masuk mepet deadline (webhook Xendit telat
+    | beberapa detik/menit). Selama masa tenggang, order tetap menahan kuota
+    | dan tetap ikut disinkronkan ke gateway oleh nontix:sync-payments.
+    */
+    'expiry_grace_minutes' => (int) env('NONTIX_EXPIRY_GRACE_MINUTES', 5),
+
+    /*
+    |--------------------------------------------------------------------------
     | Pencairan Dana Partner
     |--------------------------------------------------------------------------
     | Minimal saldo bersih yang bisa diajukan partner untuk pencairan.

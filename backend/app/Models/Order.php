@@ -93,10 +93,17 @@ class Order extends Model
         return $this->status === OrderStatus::PAID;
     }
 
-    public function scopeExpired(Builder $query): Builder
+    /**
+     * Order pending yang sudah melewati batas bayar.
+     *
+     * $graceMinutes = masa tenggang: order baru dianggap kadaluarsa setelah
+     * batas_bayar + grace, supaya pembayaran yang masuk mepet deadline
+     * (webhook telat) masih sempat ditandai lunas.
+     */
+    public function scopeExpired(Builder $query, int $graceMinutes = 0): Builder
     {
         return $query->where('status', OrderStatus::PENDING)
             ->whereNotNull('batas_bayar')
-            ->where('batas_bayar', '<', now());
+            ->where('batas_bayar', '<', now()->subMinutes(max(0, $graceMinutes)));
     }
 }

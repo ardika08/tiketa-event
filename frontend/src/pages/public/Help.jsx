@@ -9,8 +9,8 @@ const FAQ = [
     a: 'Pilih event di halaman utama, tentukan jenis dan jumlah tiket, isi data pembeli, lalu lakukan pembayaran. E-ticket akan dikirim ke emailmu secara otomatis.',
   },
   {
-    q: 'Metode pembayaran apa saja yang tersedia?',
-    a: 'Kami menyediakan QRIS, transfer bank (BCA, Mandiri, BNI), serta e-wallet seperti GoPay, OVO, DANA, dan ShopeePay melalui Mayar Invoice API.',
+    q: 'Metode pembayaran apa yang tersedia?',
+    a: 'Pembayaran hanya melalui QRIS. Scan QR yang muncul dengan aplikasi apa pun yang mendukung QRIS — m-banking, GoPay, OVO, DANA, ShopeePay, dan lainnya. Status pesanan otomatis diperbarui begitu pembayaran berhasil, jadi selesaikan sebelum batas waktu yang tertera di halaman pembayaran.',
   },
   {
     q: 'Saya tidak menerima email tiket, apa yang harus dilakukan?',

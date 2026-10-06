@@ -187,12 +187,61 @@ class OrderFlowTest extends TestCase
 
         $this->assertSame(8, $single->fresh()->sisa_kuota);
 
-        Order::where('kode_order', $kode)->update(['batas_bayar' => now()->subMinute()]);
+        // Lewati batas bayar + masa tenggang (default 5 menit).
+        Order::where('kode_order', $kode)->update(['batas_bayar' => now()->subMinutes(6)]);
 
         $this->artisan('nontix:expire-orders')->assertSuccessful();
 
         $order = Order::where('kode_order', $kode)->firstOrFail();
         $this->assertSame(OrderStatus::EXPIRED, $order->status);
         $this->assertSame(10, $single->fresh()->sisa_kuota);
+    }
+
+    public function test_order_within_grace_period_is_not_cancelled_yet(): void
+    {
+        Queue::fake();
+        [$event, , $single] = $this->scenario();
+
+        $kode = $this->postJson('/api/orders', [
+            'event_id' => $event->id,
+            'nama' => 'Budi',
+            'email' => 'budi@mail.com',
+            'whatsapp' => '08123456789',
+            'items' => [['ticket_type_id' => $single->id, 'jumlah' => 2]],
+        ])->json('data.kode_order');
+
+        // Lewat batas bayar 1 menit, tapi masih di dalam masa tenggang:
+        // pembayaran yang telat beberapa detik masih harus tertangkap.
+        Order::where('kode_order', $kode)->update(['batas_bayar' => now()->subMinute()]);
+
+        $this->artisan('nontix:expire-orders')->assertSuccessful();
+
+        $order = Order::where('kode_order', $kode)->firstOrFail();
+        $this->assertSame(OrderStatus::PENDING, $order->status);
+        $this->assertSame(8, $single->fresh()->sisa_kuota);
+    }
+
+    public function test_payment_arriving_during_grace_period_still_issues_ticket(): void
+    {
+        Queue::fake();
+        [$event, , $single] = $this->scenario();
+
+        $kode = $this->postJson('/api/orders', [
+            'event_id' => $event->id,
+            'nama' => 'Budi',
+            'email' => 'budi@mail.com',
+            'whatsapp' => '08123456789',
+            'items' => [['ticket_type_id' => $single->id, 'jumlah' => 1]],
+        ])->json('data.kode_order');
+
+        // Pembeli bayar mepet deadline: order sudah lewat batas bayar.
+        Order::where('kode_order', $kode)->update(['batas_bayar' => now()->subMinutes(2)]);
+
+        // Webhook telat masuk, tapi order belum dibatalkan (masih tenggang).
+        $this->getJson("/api/payments/{$kode}/fake")->assertOk();
+
+        $order = Order::where('kode_order', $kode)->firstOrFail();
+        $this->assertSame(OrderStatus::PAID, $order->status);
+        $this->assertCount(1, $order->tickets);
     }
 }

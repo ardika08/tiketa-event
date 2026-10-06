@@ -46,9 +46,13 @@ class ReportService
 
     private function pendingOrdersForOrganizer(int $organizerId)
     {
+        // Termasuk masa tenggang: order tetap menahan kuota sampai benar-benar
+        // dibatalkan (nontix.expiry_grace_minutes), jadi laporan ikut menyesuaikan.
+        $grace = max(0, (int) config('nontix.expiry_grace_minutes'));
+
         return Order::query()
             ->where('status', OrderStatus::PENDING)
-            ->where('batas_bayar', '>', now())
+            ->where('batas_bayar', '>', now()->subMinutes($grace))
             ->whereHas('event', fn ($q) => $q->where('organizer_id', $organizerId));
     }
 
@@ -236,7 +240,7 @@ class ReportService
     public function adminSummary(): array
     {
         $pending = Order::where('status', OrderStatus::PENDING)
-            ->where('batas_bayar', '>', now());
+            ->where('batas_bayar', '>', now()->subMinutes(max(0, (int) config('nontix.expiry_grace_minutes'))));
 
         return [
             'total_mitra' => Organizer::count(),

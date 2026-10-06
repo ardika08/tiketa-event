@@ -24,10 +24,14 @@ class SyncPayments extends Command
 
         $count = 0;
 
+        // Termasuk order yang baru lewat batas bayar tapi masih dalam masa
+        // tenggang: justru di situ pembayaran mepet deadline perlu dicek.
+        $grace = max(0, (int) config('nontix.expiry_grace_minutes'));
+
         Order::query()
             ->where('status', OrderStatus::PENDING)
             ->whereNotNull('batas_bayar')
-            ->where('batas_bayar', '>', now())
+            ->where('batas_bayar', '>', now()->subMinutes($grace))
             ->with('payments')
             ->chunkById(50, function ($list) use ($orders, $payments, &$count) {
                 foreach ($list as $order) {

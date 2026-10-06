@@ -82,7 +82,7 @@ export default function Home() {
         <div className="grid gap-4 sm:grid-cols-3">
           {[
             { icon: Ticket, title: 'Pilihan Lengkap', desc: 'Ribuan tiket dari berbagai jenis event.' },
-            { icon: Wallet, title: 'Bayar Mudah', desc: 'QRIS, transfer bank, dan e-wallet.' },
+            { icon: Wallet, title: 'Bayar Mudah', desc: 'Bayar praktis lewat QRIS.' },
             { icon: QrCode, title: 'E-Ticket Instan', desc: 'Tiket digital dikirim ke emailmu.' },
           ].map((f) => (
             <div key={f.title} className="card flex items-start gap-3 p-5 transition duration-200 hover:-translate-y-1 hover:shadow-[var(--shadow-card-hover)]">

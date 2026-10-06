@@ -28,6 +28,10 @@ class ReconcileStock extends Command
         $execute = (bool) $this->option('execute');
         $selisih = 0;
 
+        // Order yang masih menahan kuota = pending sampai batas_bayar + tenggang,
+        // sama dengan aturan pembatalan di OrderService::expireOverdue().
+        $grace = max(0, (int) config('nontix.expiry_grace_minutes'));
+
         foreach ($types as $tt) {
             // Kuota terpakai = order lunas + order pending yang masih berlaku.
             $terpakaiLunas = $tt->orderItems()
@@ -37,7 +41,7 @@ class ReconcileStock extends Command
             $terpakaiPending = $tt->orderItems()
                 ->whereHas('order', fn ($q) => $q
                     ->where('status', OrderStatus::PENDING)
-                    ->where('batas_bayar', '>', now()))
+                    ->where('batas_bayar', '>', now()->subMinutes($grace)))
                 ->sum('jumlah');
 
             $seharusnya = max(0, $tt->kuota - $terpakaiLunas - $terpakaiPending);

@@ -152,7 +152,7 @@ class MayarInvoiceTest extends TestCase
 
         $kode = $this->postJson('/api/orders', $this->orderPayload($event->id, $ticket->id))->json('data.kode_order');
 
-        Order::where('kode_order', $kode)->update(['batas_bayar' => now()->subMinute()]);
+        Order::where('kode_order', $kode)->update(['batas_bayar' => now()->subMinutes(6)]);
 
         $this->artisan('nontix:expire-orders')->assertSuccessful();
 
