@@ -41,6 +41,11 @@ class MailketingService
             ]);
 
             Mail::to($to)->send($mailable);
+
+            Log::warning('[Mailketing:smtp] Fallback SMTP terkirim.', [
+                'to' => $to,
+                'mailable' => $mailable::class,
+            ]);
         }
     }
 
@@ -55,6 +60,7 @@ class MailketingService
 
         $content = $mailable->render();
         $subject = $mailable->subject ?: '(Tanpa Subjek)';
+        $sentMessageId = $messageId ?? 'nontix-'.Str::random(12);
 
         $response = Http::timeout(20)
             ->withHeaders(['X-Api-Token' => $token])
@@ -65,7 +71,7 @@ class MailketingService
                 'subject' => $subject,
                 'recipient' => $to,
                 'content' => $content,
-                'message_id' => $messageId ?? 'nontix-'.Str::random(12),
+                'message_id' => $sentMessageId,
             ]);
 
         if (! $response->successful()) {
@@ -80,7 +86,10 @@ class MailketingService
         Log::info('[Mailketing:api] Email terkirim.', [
             'to' => $to,
             'mailable' => $mailable::class,
-            'message_id' => $messageId,
+            'message_id' => $sentMessageId,
+            'subject' => $subject,
+            'content_length' => strlen($content),
+            'api_response' => Str::limit($response->body(), 300),
         ]);
     }
 }
