@@ -17,6 +17,8 @@ class TicketTypeResource extends JsonResource
             'kuota' => $this->kuota,
             'sisa_kuota' => $this->sisa_kuota,
             'max_per_order' => $this->max_per_order,
+            'jam_masuk_mulai' => $this->jam_masuk_mulai ? substr($this->jam_masuk_mulai, 0, 5) : null,
+            'jam_masuk_selesai' => $this->jam_masuk_selesai ? substr($this->jam_masuk_selesai, 0, 5) : null,
             'terjual_lunas' => (int) ($this->terjual_lunas ?? 0),
             'gambar_url' => $this->gambar_url,
             'is_bundle' => (bool) $this->is_bundle,

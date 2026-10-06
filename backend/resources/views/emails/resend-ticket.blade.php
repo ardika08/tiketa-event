@@ -20,6 +20,12 @@
             @foreach ($order->tickets as $ticket)
                 <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px;">
                     <p style="margin:0;font-size:13px;font-weight:bold;">{{ $ticket->ticketType->nama_tiket }}</p>
+                    @if ($ticket->ticketType?->jam_masuk_mulai)
+                        @php $jamSelesai = $ticket->ticketType->jam_masuk_selesai; @endphp
+                        <p style="margin:2px 0 0;font-size:12px;color:#4f46e5;font-weight:bold;">
+                            Jam masuk: {{ substr($ticket->ticketType->jam_masuk_mulai, 0, 5) }}{{ $jamSelesai ? '–'.substr($jamSelesai, 0, 5) : '' }} WIB
+                        </p>
+                    @endif
                     <p style="margin:2px 0 8px;font-size:12px;color:#64748b;">Pemegang: {{ $ticket->nama_pemegang }} · Kode: {{ $ticket->kode_tiket }}</p>
                     <table style="width:100%;font-size:12px;border-collapse:collapse;">
                         @foreach ($ticket->passes as $pass)

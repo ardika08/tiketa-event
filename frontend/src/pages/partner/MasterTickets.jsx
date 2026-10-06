@@ -7,7 +7,7 @@ import { normalizeEvent } from '../../lib/normalize'
 import { ticketSessionsLabel, isBundleTicket } from '../../data/mock'
 import { formatRupiah } from '../../lib/utils'
 
-const EMPTY_FORM = { event_id: '', nama_tiket: '', harga: 0, kuota: 0, max_per_order: 4, session_ids: [] }
+const EMPTY_FORM = { event_id: '', nama_tiket: '', harga: 0, kuota: 0, max_per_order: 4, jam_masuk_mulai: '', jam_masuk_selesai: '', session_ids: [] }
 
 export default function MasterTickets() {
   const { data, loading, reload } = useApi(() => partnerApi.events(), [])
@@ -52,6 +52,8 @@ export default function MasterTickets() {
         harga: Number(form.harga) || 0,
         kuota: Number(form.kuota) || 0,
         max_per_order: Number(form.max_per_order) || 1,
+        jam_masuk_mulai: form.jam_masuk_mulai || null,
+        jam_masuk_selesai: form.jam_masuk_selesai || null,
         session_ids: form.session_ids,
       })
       setOpen(false)
@@ -83,13 +85,14 @@ export default function MasterTickets() {
           </div>
         ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[880px] text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-5 py-3 font-semibold">Jenis Tiket</th>
                 <th className="px-5 py-3 font-semibold">Event</th>
                 <th className="px-5 py-3 font-semibold">Sesi</th>
                 <th className="px-5 py-3 font-semibold">Harga</th>
+                <th className="px-5 py-3 font-semibold">Jam Masuk</th>
                 <th className="px-5 py-3 font-semibold">Penjualan (Lunas)</th>
                 <th className="px-5 py-3 font-semibold">Sisa Kuota</th>
                 <th className="px-5 py-3 font-semibold">Maks/Order</th>
@@ -126,6 +129,11 @@ export default function MasterTickets() {
                       )}
                     </td>
                     <td className="px-5 py-3 font-semibold text-slate-800">{formatRupiah(t.harga)}</td>
+                    <td className="px-5 py-3 text-slate-600">
+                      {t.jam_masuk_mulai
+                        ? `${t.jam_masuk_mulai}${t.jam_masuk_selesai ? `–${t.jam_masuk_selesai}` : ''}`
+                        : <span className="text-slate-400">—</span>}
+                    </td>
                     <td className="px-5 py-3 w-56">
                       <div className="mb-1 flex justify-between text-xs text-slate-500">
                         <span><span className="font-semibold text-slate-700">{terjual.toLocaleString('id-ID')}</span> / {t.kuota.toLocaleString('id-ID')}</span>
@@ -177,6 +185,15 @@ export default function MasterTickets() {
               <Input type="number" value={form.max_per_order} onChange={(e) => setForm({ ...form, max_per_order: e.target.value })} />
             </Field>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Jam Masuk Mulai">
+              <Input type="time" value={form.jam_masuk_mulai} onChange={(e) => setForm({ ...form, jam_masuk_mulai: e.target.value })} />
+            </Field>
+            <Field label="Jam Masuk Selesai">
+              <Input type="time" value={form.jam_masuk_selesai} onChange={(e) => setForm({ ...form, jam_masuk_selesai: e.target.value })} />
+            </Field>
+          </div>
+          <p className="text-xs text-slate-400">Opsional — jam masuk khusus untuk jenis tiket ini (mis. VIP masuk lebih awal). Kosongkan jika mengikuti jam event.</p>
 
           {sessions.length > 0 && (
             <div>

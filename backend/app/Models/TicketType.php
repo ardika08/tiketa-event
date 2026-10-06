@@ -19,6 +19,8 @@ class TicketType extends Model
         'kuota',
         'sisa_kuota',
         'max_per_order',
+        'jam_masuk_mulai',
+        'jam_masuk_selesai',
         'gambar_url',
         'is_bundle',
         'status',

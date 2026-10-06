@@ -22,6 +22,8 @@ class TicketResource extends JsonResource
             'nama_pemegang' => $this->nama_pemegang,
             'ticket_type_id' => $this->ticket_type_id,
             'nama_tiket' => $this->whenLoaded('ticketType', fn () => $this->ticketType?->nama_tiket),
+            'jam_masuk_mulai' => $this->whenLoaded('ticketType', fn () => $this->ticketType?->jam_masuk_mulai ? substr($this->ticketType->jam_masuk_mulai, 0, 5) : null),
+            'jam_masuk_selesai' => $this->whenLoaded('ticketType', fn () => $this->ticketType?->jam_masuk_selesai ? substr($this->ticketType->jam_masuk_selesai, 0, 5) : null),
             'gambar_url' => $this->whenLoaded('ticketType', fn () => $this->ticketType?->gambar_url),
             'status_kehadiran' => $this->status_kehadiran?->value,
             'checkin_at' => $this->checkin_at?->toIso8601String(),

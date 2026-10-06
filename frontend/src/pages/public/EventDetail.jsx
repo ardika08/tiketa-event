@@ -141,6 +141,11 @@ export default function EventDetail() {
         <div className="flex flex-1 flex-col p-4">
           <h4 className="font-bold text-slate-900">{ticket.nama_tiket}</h4>
           <p className="mt-1 text-lg font-extrabold text-brand-700">{formatRupiah(ticket.harga)}</p>
+          {ticket.jam_masuk_mulai && (
+            <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-brand-600">
+              <Clock size={12} /> Jam masuk: {ticket.jam_masuk_mulai}{ticket.jam_masuk_selesai ? `–${ticket.jam_masuk_selesai}` : ''} WIB
+            </p>
+          )}
           {coverage && isBundleTicket(ticket) && (
             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-brand-600">
               <Layers size={12} /> Berlaku: {coverage}

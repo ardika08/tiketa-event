@@ -109,6 +109,11 @@ export default function Ticket() {
                         </Badge>
                       </div>
                       {pass.session_name && <p className="font-semibold text-slate-800">{pass.session_name}</p>}
+                      {t.jam_masuk_mulai && (
+                        <p className="text-xs font-bold text-brand-700">
+                          Jam masuk: {t.jam_masuk_mulai}{t.jam_masuk_selesai ? `–${t.jam_masuk_selesai}` : ''} WIB
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                         <span className="flex items-center gap-1.5"><CalendarDays size={13} /> {formatTanggal(pass.tanggal_mulai || order.event.tanggal_mulai, { withTime: true })}</span>
                         <span className="flex items-center gap-1.5"><MapPin size={13} /> {pass.lokasi || order.event.lokasi}</span>

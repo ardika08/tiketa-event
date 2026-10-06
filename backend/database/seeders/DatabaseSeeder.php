@@ -115,10 +115,10 @@ class DatabaseSeeder extends Seeder
 
         $this->ticket($event, 'Festival Day 1 (Standing)', 250000, 2000, 620, 6, [$day1->id]);
         $this->ticket($event, 'Tribun Day 1 (Seated)', 450000, 800, 145, 4, [$day1->id]);
-        $this->ticket($event, 'VIP Day 1 (Front Row)', 1250000, 120, 0, 2, [$day1->id]);
-        $this->ticket($event, 'Festival Day 2 (Standing)', 300000, 2000, 880, 6, [$day2->id]);
-        $this->ticket($event, 'Tribun Day 2 (Seated)', 500000, 800, 320, 4, [$day2->id]);
-        $this->ticket($event, 'VIP Day 2 (Front Row)', 1350000, 120, 36, 2, [$day2->id]);
+        $this->ticket($event, 'VIP Day 1 (Front Row)', 1250000, 120, 0, 2, [$day1->id], '16:00', '23:00');
+        $this->ticket($event, 'Festival Day 2 (Standing)', 300000, 2000, 880, 6, [$day2->id], '17:00', '23:00');
+        $this->ticket($event, 'Tribun Day 2 (Seated)', 500000, 800, 320, 4, [$day2->id], '16:30', '23:00');
+        $this->ticket($event, 'VIP Day 2 (Front Row)', 1350000, 120, 36, 2, [$day2->id], '16:00', '23:00');
 
         $this->ticket($event, '2-Day Pass', 400000, 500, 264, 4, [$day1->id, $day2->id]);
         $this->ticket($event, 'Full Festival Pass', 1500000, 150, 42, 2, [$day1->id, $day2->id]);
@@ -210,7 +210,7 @@ class DatabaseSeeder extends Seeder
     /**
      * @param  array<int, int>  $sessionIds
      */
-    private function ticket(Event $event, string $nama, float $harga, int $kuota, int $sisa, int $max, array $sessionIds = []): void
+    private function ticket(Event $event, string $nama, float $harga, int $kuota, int $sisa, int $max, array $sessionIds = [], ?string $jamMulai = null, ?string $jamSelesai = null): void
     {
         $ticketType = $event->ticketTypes()->create([
             'nama_tiket' => $nama,
@@ -218,6 +218,8 @@ class DatabaseSeeder extends Seeder
             'kuota' => $kuota,
             'sisa_kuota' => $sisa,
             'max_per_order' => $max,
+            'jam_masuk_mulai' => $jamMulai,
+            'jam_masuk_selesai' => $jamSelesai,
             'is_bundle' => count($sessionIds) > 1,
             'status' => 'aktif',
         ]);

@@ -119,6 +119,8 @@ export default function EventForm() {
           harga: Number(t.harga) || 0,
           kuota: Number(t.kuota) || 0,
           max_per_order: Number(t.max_per_order) || 1,
+          jam_masuk_mulai: t.jam_masuk_mulai || null,
+          jam_masuk_selesai: t.jam_masuk_selesai || null,
           gambar_url: t.gambar_url || null,
           session_ids: ticketSessionIds(t),
         }
@@ -363,7 +365,7 @@ export default function EventForm() {
               <h2 className="font-bold text-slate-900">Jenis Tiket</h2>
               <p className="text-sm text-slate-500">Atur harga, kuota, gambar tiket (opsional), dan batas pembelian.</p>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => setTiket((l) => [...l, { _key: `new-${Date.now()}`, id: null, nama_tiket: '', harga: 0, kuota: 0, sisa_kuota: 0, max_per_order: 4, gambar_url: '', session_ids: [] }])}>
+            <Button variant="secondary" size="sm" onClick={() => setTiket((l) => [...l, { _key: `new-${Date.now()}`, id: null, nama_tiket: '', harga: 0, kuota: 0, sisa_kuota: 0, max_per_order: 4, jam_masuk_mulai: '', jam_masuk_selesai: '', gambar_url: '', session_ids: [] }])}>
               <Plus size={15} /> Tambah
             </Button>
           </div>
@@ -398,6 +400,18 @@ export default function EventForm() {
                     </Button>
                   </div>
                 </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label text-xs">Jam Masuk Mulai</label>
+                    <Input type="time" value={t.jam_masuk_mulai || ''} onChange={(e) => updateTiket(t._key, 'jam_masuk_mulai', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Jam Masuk Selesai</label>
+                    <Input type="time" value={t.jam_masuk_selesai || ''} onChange={(e) => updateTiket(t._key, 'jam_masuk_selesai', e.target.value)} />
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-slate-400">Opsional — kosongkan jika jam masuk mengikuti jam event/sesi.</p>
 
                 <div className="mt-3">
                   <label className="label text-xs">Gambar Tiket (opsional)</label>

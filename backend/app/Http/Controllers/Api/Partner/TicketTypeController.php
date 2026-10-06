@@ -116,6 +116,8 @@ class TicketTypeController extends PartnerController
             'kuota' => [$required, 'integer', 'min:1'],
             'sisa_kuota' => ['nullable', 'integer', 'min:0'],
             'max_per_order' => ['nullable', 'integer', 'min:1'],
+            'jam_masuk_mulai' => ['nullable', 'date_format:H:i'],
+            'jam_masuk_selesai' => ['nullable', 'date_format:H:i'],
             'gambar_url' => ['nullable', 'string', 'max:500'],
             'status' => ['nullable', 'in:aktif,nonaktif'],
         ]);
