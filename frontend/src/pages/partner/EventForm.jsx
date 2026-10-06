@@ -31,7 +31,7 @@ export default function EventForm() {
   const existing = useMemo(() => normalizeEvent(data?.data), [data])
   const { data: gatesData } = useApi(() => partnerApi.gates(), [])
   const { data: staffsData } = useApi(() => partnerApi.staffs(), [])
-  const { data: fieldsData } = useApi(() => partnerApi.formFields(), [])
+  const { data: fieldsData, reload: reloadFields } = useApi(() => partnerApi.formFields(), [])
 
   const [tab, setTab] = useState('info')
   const [saved, setSaved] = useState(false)
@@ -52,6 +52,7 @@ export default function EventForm() {
   const [eventSessions, setEventSessions] = useState([])
   const [originalTicketIds, setOriginalTicketIds] = useState([])
   const [fields, setFields] = useState([])
+  const [originalFieldIds, setOriginalFieldIds] = useState([])
   const [gates, setGates] = useState([])
   const [staffs, setStaffs] = useState([])
   const [denah, setDenah] = useState({ nama: 'Layout Utama', gambar_url: '' })
@@ -67,7 +68,13 @@ export default function EventForm() {
 
   useEffect(() => { if (gatesData) setGates(gatesData.data || []) }, [gatesData])
   useEffect(() => { if (staffsData) setStaffs(staffsData.data || []) }, [staffsData])
-  useEffect(() => { if (fieldsData) setFields(fieldsData.data || []) }, [fieldsData])
+  useEffect(() => {
+    if (!fieldsData) return
+    // Hanya field milik event ini + field organizer-level (event_id NULL).
+    const mine = (fieldsData.data || []).filter((f) => !f.event_id || f.event_id === existing?.id)
+    setFields(mine.map((f) => ({ ...f, ticket_key: f.ticket_type_id ?? null, _key: f.id })))
+    setOriginalFieldIds(mine.map((f) => f.id))
+  }, [fieldsData, existing?.id])
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
 
@@ -135,6 +142,36 @@ export default function EventForm() {
       for (const oldId of originalTicketIds) {
         if (oldId && !keptIds.includes(oldId)) await partnerApi.deleteTicketType(oldId)
       }
+
+      // Formulir custom: simpan field sungguhan (create/update/delete) + scope tiket.
+      const ticketIdByKey = new Map(tiket.map((t) => [String(t._key), t.id]))
+      const keptFieldIds = []
+      let fieldUrutan = 1
+      for (const f of fields.filter((x) => !x.event_id || x.event_id === eventId)) {
+        const targetId = f.ticket_key ? ticketIdByKey.get(String(f.ticket_key)) : null
+        if (f.ticket_key && !targetId) continue // tiket referensinya sudah dihapus
+        const payload = {
+          label: (f.label || '').trim() || 'Field Baru',
+          tipe: f.tipe || 'teks',
+          wajib: !!f.wajib,
+          urutan: fieldUrutan++,
+          ticket_type_id: targetId ?? null,
+        }
+        if (!f.id) {
+          const res = await partnerApi.createFormField({ ...payload, event_id: eventId })
+          keptFieldIds.push(res.data.id)
+        } else {
+          const upd = { ...payload }
+          if (!f.event_id && targetId) upd.event_id = eventId // field organizer-level di-scope ke event ini
+          await partnerApi.updateFormField(f.id, upd)
+          keptFieldIds.push(f.id)
+        }
+      }
+      for (const oldId of originalFieldIds) {
+        if (oldId && !keptFieldIds.includes(oldId)) await partnerApi.deleteFormField(oldId)
+      }
+
+      await reloadFields() // sinkronkan state fields dengan data terbaru dari server
 
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
@@ -469,26 +506,32 @@ export default function EventForm() {
               <h2 className="font-bold text-slate-900">Formulir Data Pembeli</h2>
               <p className="text-sm text-slate-500">Pilih data yang wajib/opsional diisi pembeli.</p>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => setFields((l) => [...l, { id: Date.now(), label: 'Field Baru', tipe: 'teks', wajib: false, urutan: l.length + 1 }])}>
+            <Button variant="secondary" size="sm" onClick={() => setFields((l) => [...l, { _key: `new-${Date.now()}`, id: null, event_id: null, label: 'Field Baru', tipe: 'teks', wajib: false, urutan: l.length + 1, ticket_key: null }])}>
               <Plus size={15} /> Tambah Field
             </Button>
           </div>
           <div className="space-y-2">
             {fields.map((f) => (
-              <div key={f.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3">
+              <div key={f._key} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3">
                 <GripVertical size={16} className="text-slate-300" />
-                <Input value={f.label} onChange={(e) => setFields((l) => l.map((x) => (x.id === f.id ? { ...x, label: e.target.value } : x)))} className="max-w-xs" />
-                <Select value={f.tipe} onChange={(e) => setFields((l) => l.map((x) => (x.id === f.id ? { ...x, tipe: e.target.value } : x)))} className="max-w-[150px]">
+                <Input value={f.label} onChange={(e) => setFields((l) => l.map((x) => (x._key === f._key ? { ...x, label: e.target.value } : x)))} className="max-w-xs" />
+                <Select value={f.tipe} onChange={(e) => setFields((l) => l.map((x) => (x._key === f._key ? { ...x, tipe: e.target.value } : x)))} className="max-w-[150px]">
                   <option value="teks">Teks</option>
                   <option value="email">Email</option>
                   <option value="nomor">Nomor</option>
                   <option value="sosial">Sosial</option>
                 </Select>
+                <Select value={String(f.ticket_key ?? '')} onChange={(e) => setFields((l) => l.map((x) => (x._key === f._key ? { ...x, ticket_key: e.target.value || null } : x)))} className="max-w-[180px]">
+                  <option value="">Semua tiket</option>
+                  {tiket.map((t) => (
+                    <option key={t._key} value={String(t._key)}>{t.nama_tiket || '(tiket baru)'}</option>
+                  ))}
+                </Select>
                 <label className="flex items-center gap-2 text-sm text-slate-600">
-                  <input type="checkbox" checked={f.wajib} onChange={(e) => setFields((l) => l.map((x) => (x.id === f.id ? { ...x, wajib: e.target.checked } : x)))} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                  <input type="checkbox" checked={f.wajib} onChange={(e) => setFields((l) => l.map((x) => (x._key === f._key ? { ...x, wajib: e.target.checked } : x)))} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                   Wajib
                 </label>
-                <Button variant="ghost" size="icon" className="ml-auto text-rose-600" onClick={() => setFields((l) => l.filter((x) => x.id !== f.id))}>
+                <Button variant="ghost" size="icon" className="ml-auto text-rose-600" onClick={() => setFields((l) => l.filter((x) => x._key !== f._key))}>
                   <Trash2 size={16} />
                 </Button>
               </div>
