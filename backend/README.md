@@ -34,7 +34,8 @@ Konfigurasi penting di `.env`:
 | `NONTIX_ORDER_EXPIRY_MINUTES` | 60 | batas bayar order |
 | `NONTIX_MIN_PAYOUT` | 50000 | minimal saldo bersih untuk pengajuan pencairan partner |
 | `MAYAR_MODE` | fake | `fake` = simulasi, `live` = panggil API Mayar |
-| `MAILKETING_MODE` | fake | `fake` = tulis log, `live` = kirim via SMTP |
+| `MAILKETING_MODE` | fake | `fake` = tulis log, `live` = kirim via Mailketing API v2 (fallback SMTP bila API gagal) |
+| `MAILKETING_API_TOKEN` | - | API token Mailketing (wajib saat mode live) |
 
 ### Menjalankan
 
@@ -357,6 +358,7 @@ MAIL_PORT=587
 MAIL_USERNAME=...
 MAIL_PASSWORD=...
 MAILKETING_MODE=live
+MAILKETING_API_TOKEN=...   # dari dashboard Mailketing → API
 ```
 
 ### 4. Migrasi & optimize
