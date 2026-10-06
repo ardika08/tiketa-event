@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { Ticket as TicketIcon, CalendarDays, Download, RefreshCw, Info, Layers } from 'lucide-react'
+import { toPng } from 'html-to-image'
+import { Ticket as TicketIcon, CalendarDays, Download, RefreshCw, Info, Layers, Loader2 } from 'lucide-react'
 import { Button, Card, Badge, EmptyState } from '../../components/ui'
 import { formatTanggal } from '../../lib/utils'
 import { useOrder } from '../../context/OrderContext'
@@ -72,6 +73,7 @@ function Perforation() {
 export default function Ticket() {
   const { order, refreshOrder } = useOrder()
   const [searchParams] = useSearchParams()
+  const [downloadingId, setDownloadingId] = useState(null)
 
   useEffect(() => {
     const kode = searchParams.get('kode')
@@ -82,6 +84,31 @@ export default function Ticket() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const handleDownloadFullTicket = async (kodeTiket, filename) => {
+    const cardId = `ticket-card-${kodeTiket}`
+    const node = document.getElementById(cardId)
+    if (!node) return
+    setDownloadingId(kodeTiket)
+    try {
+      const dataUrl = await toPng(node, {
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+        filter: (child) => !child?.classList?.contains('no-export'),
+      })
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `nontix-ticket-${String(filename || kodeTiket).replace(/[^a-zA-Z0-9-_]/g, '-')}.png`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch (err) {
+      console.error('Gagal mengunduh kartu tiket:', err)
+    } finally {
+      setDownloadingId(null)
+    }
+  }
 
   if (!order) {
     return (
@@ -117,7 +144,7 @@ export default function Ticket() {
             : [{ kode_qr: t.kode_tiket, session_label: t.session_label, session_name: t.session_name, tanggal_mulai: null, lokasi: null, status: 'belum_hadir' }]
 
           return (
-            <Card key={t.kode_tiket} className="overflow-hidden shadow-sm">
+            <Card key={t.kode_tiket} id={`ticket-card-${t.kode_tiket}`} className="overflow-hidden shadow-sm">
               {/* 1. Header banner ala boarding pass */}
               <div className="bg-gradient-to-r from-brand-700 to-accent-500 px-4 py-3.5 text-white sm:px-5 sm:py-4">
                 <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -213,11 +240,27 @@ export default function Ticket() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        className="h-8 text-xs"
+                        className="no-export h-8 text-xs font-semibold"
+                        disabled={downloadingId === t.kode_tiket}
+                        onClick={() => handleDownloadFullTicket(t.kode_tiket, `${order.kode_order}-${t.nama_pemegang}`)}
+                      >
+                        {downloadingId === t.kode_tiket ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin" /> Menyiapkan Tiket...
+                          </>
+                        ) : (
+                          <>
+                            <Download size={13} /> Unduh E-Tiket (PNG)
+                          </>
+                        )}
+                      </Button>
+                      <button
+                        type="button"
+                        className="no-export text-[10px] text-slate-400 hover:text-slate-600 underline"
                         onClick={() => downloadQrPng(pass.kode_qr, pass.session_label)}
                       >
-                        <Download size={13} /> Unduh PNG
-                      </Button>
+                        Atau unduh QR saja
+                      </button>
                     </div>
                   </div>
                 )
