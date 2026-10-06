@@ -141,14 +141,18 @@ export default function PaymentSuccess() {
           <div className="mt-5 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4">
             <Mail className="mt-0.5 shrink-0 text-sky-600" size={20} />
             <p className="text-sm text-sky-800">
-              Invoice dan e-ticket telah dikirim ke <span className="font-semibold">{order.buyer.email}</span> melalui Mailketing SMTP.
+              Invoice dan konfirmasi pembayaran telah dikirim ke <span className="font-semibold">{order.buyer.email}</span>.
             </p>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <Link to="/tiket/saya"><Button size="lg" className="w-full"><TicketIcon size={18} /> Lihat E-Ticket</Button></Link>
-            <Link to="/invoice"><Button size="lg" variant="secondary" className="w-full"><FileText size={18} /> Lihat Invoice</Button></Link>
+          <div className="mt-6">
+            {/* Tombol e-ticket disembunyikan sementara: vendor ingin jual tiket dulu, QR E-Ticket menyusul */}
+            {/* <Link to="/tiket/saya"><Button size="lg" className="w-full"><TicketIcon size={18} /> Lihat E-Ticket</Button></Link> */}
+            <Link to="/invoice"><Button size="lg" className="w-full"><FileText size={18} /> Lihat Invoice</Button></Link>
           </div>
+          <p className="mt-3 text-center text-sm text-slate-500">
+            E-Ticket resmi dan QR Code akan dikirimkan menyusul ke emailmu menjelang event.
+          </p>
           <Link to="/" className="mt-3 block">
             <Button variant="ghost" className="w-full"><Home size={16} /> Kembali ke Beranda</Button>
           </Link>

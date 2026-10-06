@@ -42,7 +42,9 @@
             @endforeach
 
             <div style="margin-top:20px;">
-                <a href="{{ $frontendUrl }}/tiket/saya?kode={{ urlencode($order->kode_order) }}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-size:14px;">Lihat E-Ticket</a>
+                <a href="{{ $frontendUrl }}/invoice?kode={{ urlencode($order->kode_order) }}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-size:14px;">Lihat Invoice</a>
+                {{-- Tombol e-ticket disembunyikan sementara: vendor ingin jual tiket dulu, QR E-Ticket menyusul --}}
+                {{-- <a href="{{ $frontendUrl }}/tiket/saya?kode={{ urlencode($order->kode_order) }}" style="display:inline-block;margin-left:8px;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-size:14px;">Lihat E-Ticket</a> --}}
             </div>
 
             <p style="margin:24px 0 0;font-size:12px;color:#94a3b8;">
