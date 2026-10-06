@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BadgePercent, Check, Ticket as TicketIcon, Info, Layers, FormInput } from 'lucide-react'
 import { Button, Card, Field, Input, Badge, EmptyState, Modal } from '../../components/ui'
-import { groupItemsBySession } from '../../data/mock'
+import { groupItemsBySession } from '../../lib/ticketGroups'
 import { publicApi } from '../../lib/api'
 import { formatRupiah, formatTanggal, cn } from '../../lib/utils'
 import { useOrder } from '../../context/OrderContext'
@@ -284,7 +284,6 @@ export default function Checkout() {
                 {voucherMsg.text}
               </p>
             )}
-            <p className="mt-3 text-xs text-slate-400">Coba kode demo: NONTIX50 (potongan Rp 50.000) atau HEMAT10 (diskon 10%).</p>
           </Card>
         </div>
 
@@ -428,11 +427,11 @@ export default function Checkout() {
 
             {payError && <p className="text-sm font-medium text-rose-600">{payError}</p>}
 
-            <p className="text-xs text-slate-400">
-              {isHostedProvider(pendingOrder.payment_provider)
-                ? `Kamu akan diarahkan ke halaman pembayaran aman ${paymentProviderLabel(pendingOrder.payment_provider)}.`
-                : 'Mode demo: pesanan akan langsung ditandai lunas.'}
-            </p>
+            {isHostedProvider(pendingOrder.payment_provider) && (
+              <p className="text-xs text-slate-400">
+                Kamu akan diarahkan ke halaman pembayaran aman {paymentProviderLabel(pendingOrder.payment_provider)}.
+              </p>
+            )}
           </div>
         )}
       </Modal>

@@ -4,7 +4,7 @@ import { Button, Card, PageHeader, ProgressBar, Badge, Modal, Field, Input, Sele
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { normalizeEvent } from '../../lib/normalize'
-import { ticketSessionsLabel, isBundleTicket } from '../../data/mock'
+import { ticketSessionsLabel, isBundleTicket } from '../../lib/ticketGroups'
 import { formatRupiah } from '../../lib/utils'
 
 const EMPTY_FORM = { event_id: '', nama_tiket: '', harga: 0, kuota: 0, max_per_order: 4, jam_masuk_mulai: '', jam_masuk_selesai: '', session_ids: [] }

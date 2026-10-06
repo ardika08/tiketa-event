@@ -80,7 +80,7 @@ export default function AdminReports() {
           <div className="py-6 text-center">
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-emerald-600"><CheckCircle2 size={28} /></div>
             <p className="mt-3 font-semibold text-slate-800">File berhasil disiapkan</p>
-            <p className="text-sm text-slate-500">{selected.id}-report.{format.toLowerCase()} (demo) siap diunduh.</p>
+            <p className="text-sm text-slate-500">{selected.id}-report.{format.toLowerCase()} siap diunduh.</p>
           </div>
         ) : (
           <div className="flex items-center gap-3">

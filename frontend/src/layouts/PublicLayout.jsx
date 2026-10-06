@@ -132,7 +132,6 @@ export default function PublicLayout() {
           <div>
             <h4 className="text-sm font-bold text-white">Lainnya</h4>
             <ul className="mt-4 space-y-3 text-sm text-slate-300">
-              <li><Link to="/admin/masuk" className="transition hover:text-white">Admin Platform</Link></li>
               <li><span className="text-slate-300">Syarat & Ketentuan</span></li>
               <li><span className="text-slate-300">Kebijakan Privasi</span></li>
             </ul>

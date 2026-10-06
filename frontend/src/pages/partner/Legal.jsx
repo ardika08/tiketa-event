@@ -48,7 +48,7 @@ export default function Legal() {
         action={<Button onClick={save} disabled={saving}><Save size={16} /> {saving ? 'Menyimpan...' : 'Simpan'}</Button>}
       />
 
-      {saved && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">Data berhasil disimpan (demo).</div>}
+      {saved && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">Data berhasil disimpan.</div>}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="p-6">

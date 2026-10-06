@@ -318,7 +318,7 @@ export default function Finance() {
           <div className="py-6 text-center">
             <p className="text-2xl">✅</p>
             <p className="mt-2 font-semibold text-slate-800">File berhasil disiapkan</p>
-            <p className="text-sm text-slate-500">Laporan_keuangan.csv (demo) siap diunduh.</p>
+            <p className="text-sm text-slate-500">Laporan_keuangan.csv siap diunduh.</p>
           </div>
         ) : (
           <div className="space-y-3">

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Clock, ShieldCheck, Info, ChevronRight, AlertTriangle, Layers } from 'lucide-react'
 import { Button, Card, Badge, EmptyState } from '../../components/ui'
-import { groupItemsBySession } from '../../data/mock'
+import { groupItemsBySession } from '../../lib/ticketGroups'
 import { formatRupiah, formatTanggal, cn, pad } from '../../lib/utils'
 import { useOrder } from '../../context/OrderContext'
 import { paymentProviderLabel, isHostedProvider } from '../../lib/paymentProvider'
@@ -172,13 +172,11 @@ export default function Payment() {
               {processing ? 'Memproses...' : 'Bayar Sekarang'} <ChevronRight size={18} />
             </Button>
             {payError && <p className="mt-2 text-center text-xs font-medium text-rose-600">{payError}</p>}
-            <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400">
-              {providerLabel ? (
-                <><Badge color="brand">{providerLabel}</Badge> kamu akan diarahkan ke halaman pembayaran aman</>
-              ) : (
-                <><Badge color="slate">Demo</Badge> tombol bayar akan menandai pesanan lunas</>
-              )}
-            </div>
+            {providerLabel && (
+              <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400">
+                <Badge color="brand">{providerLabel}</Badge> kamu akan diarahkan ke halaman pembayaran aman
+              </div>
+            )}
           </Card>
         </div>
       </div>

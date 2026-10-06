@@ -6,7 +6,7 @@ import {
 import { Button, Card, Field, Input, Select, Textarea, Badge, PageHeader } from '../../components/ui'
 import { ImagePicker } from '../../components/ImagePicker'
 import { KATEGORI } from '../../lib/constants'
-import { ticketSessionIds, isBundleTicket } from '../../data/mock'
+import { ticketSessionIds, isBundleTicket } from '../../lib/ticketGroups'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { normalizeEvent } from '../../lib/normalize'
@@ -239,7 +239,7 @@ export default function EventForm() {
 
       {saved && (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-          Perubahan berhasil disimpan (demo).
+          Perubahan berhasil disimpan.
         </div>
       )}
 
@@ -612,7 +612,7 @@ export default function EventForm() {
             </div>
 
             <div>
-              <p className="mb-3 text-sm text-slate-500">Pratinjau denah kursi (demo). Kursi dapat diatur kode, baris, dan kategorinya.</p>
+              <p className="mb-3 text-sm text-slate-500">Pratinjau denah kursi. Kursi dapat diatur kode, baris, dan kategorinya.</p>
               <div className="overflow-x-auto rounded-xl bg-slate-50 p-4">
                 {['A', 'B', 'C'].map((row, ri) => (
                   <div key={row} className="mb-2 flex items-center gap-3">

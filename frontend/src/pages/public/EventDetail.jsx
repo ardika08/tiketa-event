@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { Badge, Button, Card, EmptyState } from '../../components/ui'
 import { EventImage } from '../../components/EventCard'
-import { isBundleTicket, ticketCoversSession, ticketSessionsLabel } from '../../data/mock'
+import { isBundleTicket, ticketCoversSession, ticketSessionsLabel } from '../../lib/ticketGroups'
 import { publicApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { normalizeEvent } from '../../lib/normalize'
