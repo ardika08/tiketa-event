@@ -101,8 +101,22 @@ class XenditService implements PaymentGateway
             'cancel_return_url' => $this->returnUrl($order, 'cancel'),
         ];
 
+        // Batasi channel di halaman Xendit (mis. hanya QRIS). Kalau kosong,
+        // Xendit menampilkan semua channel yang aktif di akun.
+        $channels = array_values(array_filter((array) config('nontix.xendit.allowed_payment_channels', [])));
+        if ($channels !== []) {
+            $payload['allowed_payment_channels'] = $channels;
+        }
+
         if ($order->batas_bayar) {
-            $payload['expires_at'] = $order->batas_bayar->clone()->utc()->format('Y-m-d\TH:i:s\Z');
+            // Xendit menolak expires_at kurang dari 10 menit dari sekarang
+            // (INVALID_EXPIRY_DATE). Kalau sisa waktu order < 10 menit (mis.
+            // order lama dibayar ulang), pakai 11 menit agar tidak error 400.
+            $expiry = $order->batas_bayar->greaterThan(now()->addMinutes(10))
+                ? $order->batas_bayar
+                : now()->addMinutes(11);
+
+            $payload['expires_at'] = $expiry->clone()->utc()->format('Y-m-d\TH:i:s\Z');
         }
 
         $response = Http::withBasicAuth((string) config('nontix.xendit.secret_key'), '')

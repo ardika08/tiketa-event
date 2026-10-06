@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\OrderStatus;
 use App\Models\Order;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\Concerns\InteractsWithNontix;
@@ -79,6 +80,74 @@ class XenditGatewayTest extends TestCase
         $order = Order::where('kode_order', $kode)->firstOrFail();
         $this->assertSame('xendit', $order->gateway);
         $this->assertSame('ps-123', $order->payments()->latest()->first()->provider_reference);
+    }
+
+    public function test_session_is_restricted_to_qris_only(): void
+    {
+        Queue::fake();
+        [$event, $ticket] = $this->scenario();
+
+        Http::fake([
+            'api.xendit.co/sessions' => Http::response([
+                'payment_session_id' => 'ps-qris',
+                'payment_link_url' => 'https://xen.to/qris',
+            ], 201),
+        ]);
+
+        $this->postJson('/api/orders', $this->payload($event->id, $ticket->id))->assertCreated();
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/sessions')
+            && $request['allowed_payment_channels'] === ['QRIS']);
+    }
+
+    public function test_session_sends_all_channels_when_restriction_is_empty(): void
+    {
+        Queue::fake();
+        config()->set('nontix.xendit.allowed_payment_channels', []);
+        [$event, $ticket] = $this->scenario();
+
+        Http::fake([
+            'api.xendit.co/sessions' => Http::response([
+                'payment_session_id' => 'ps-all',
+                'payment_link_url' => 'https://xen.to/all',
+            ], 201),
+        ]);
+
+        $this->postJson('/api/orders', $this->payload($event->id, $ticket->id))->assertCreated();
+
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/sessions')
+            && ! isset($request['allowed_payment_channels']));
+    }
+
+    public function test_session_expiry_matches_order_deadline_and_never_below_xendit_minimum(): void
+    {
+        Queue::fake();
+        [$event, $ticket] = $this->scenario();
+
+        Http::fake([
+            'api.xendit.co/sessions' => Http::response([
+                'payment_session_id' => 'ps-exp',
+                'payment_link_url' => 'https://xen.to/exp',
+            ], 201),
+        ]);
+
+        $this->postJson('/api/orders', $this->payload($event->id, $ticket->id))->assertCreated();
+
+        $captured = null;
+        Http::assertSent(function ($request) use (&$captured) {
+            if (str_ends_with($request->url(), '/sessions')) {
+                $captured = $request['expires_at'];
+            }
+
+            return true;
+        });
+
+        $this->assertNotNull($captured, 'expires_at harus dikirim ke Xendit');
+        // Xendit menolak expires_at < 10 menit dari sekarang (INVALID_EXPIRY_DATE).
+        $this->assertTrue(
+            Carbon::parse($captured)->greaterThan(now()->addMinutes(9)->addSeconds(30)),
+            "expires_at terlalu dekat: {$captured}",
+        );
     }
 
     public function test_webhook_completed_marks_paid_when_api_confirms(): void

@@ -15,7 +15,7 @@ return [
     |--------------------------------------------------------------------------
     | Berapa menit sebuah order pending dapat dibayar sebelum dibatalkan.
     */
-    'order_expiry_minutes' => (int) env('NONTIX_ORDER_EXPIRY_MINUTES', 60),
+    'order_expiry_minutes' => (int) env('NONTIX_ORDER_EXPIRY_MINUTES', 15),
 
     /*
     |--------------------------------------------------------------------------
@@ -63,6 +63,18 @@ return [
         'secret_key' => env('XENDIT_SECRET_KEY'),
         'mode' => env('XENDIT_MODE', 'test'), // test | live
         'webhook_token' => env('XENDIT_WEBHOOK_TOKEN'),
+
+        /*
+        | Channel yang boleh muncul di halaman pembayaran Xendit (Xendit Hosted
+        | Checkout). Kosongkan untuk menampilkan semua channel yang aktif di akun.
+        | Contoh: QRIS  |  QRIS,BCA,DANA  |  (kosong = semua)
+        | Catatan: channel WAJIB sudah aktif di dashboard Xendit, kalau tidak
+        | API membalas INVALID_PAYMENT_CHANNEL dan checkout gagal total.
+        */
+        'allowed_payment_channels' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('XENDIT_ALLOWED_PAYMENT_CHANNELS', 'QRIS')),
+        ))),
     ],
 
     /*
