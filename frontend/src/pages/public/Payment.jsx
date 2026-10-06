@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Clock, ShieldCheck, Info, ChevronRight, AlertTriangle, Layers } from 'lucide-react'
 import { Button, Card, Badge, EmptyState } from '../../components/ui'
-import { PAYMENT_METHODS } from '../../lib/constants'
 import { groupItemsBySession } from '../../data/mock'
 import { formatRupiah, formatTanggal, cn, pad } from '../../lib/utils'
 import { useOrder } from '../../context/OrderContext'
@@ -11,7 +10,6 @@ import { paymentProviderLabel, isHostedProvider } from '../../lib/paymentProvide
 export default function Payment() {
   const { order, markPaid } = useOrder()
   const navigate = useNavigate()
-  const [selected, setSelected] = useState(order?.metode?.id || null)
   const [processing, setProcessing] = useState(false)
   const [payError, setPayError] = useState(null)
   const [now, setNow] = useState(Date.now())
@@ -44,14 +42,7 @@ export default function Payment() {
   const detik = Math.floor((sisa % 60000) / 1000)
   const itemGroups = groupItemsBySession(order.event, order.items)
 
-  const groups = PAYMENT_METHODS.reduce((acc, m) => {
-    acc[m.kategori] = acc[m.kategori] || []
-    acc[m.kategori].push(m)
-    return acc
-  }, {})
-
   const handlePay = async () => {
-    if (!selected) return
     setPayError(null)
 
     // Gateway hosted (Xendit/Mayar): pembeli menyelesaikan pembayaran di halaman provider.
@@ -109,37 +100,21 @@ export default function Payment() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">
           <Card className="p-6">
-            <h2 className="mb-4 text-lg font-bold text-slate-900">Pilih Metode Bayar</h2>
-            <div className="space-y-5">
-              {Object.entries(groups).map(([kategori, methods]) => (
-                <div key={kategori}>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{kategori}</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {methods.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => setSelected(m.id)}
-                        disabled={kadaluarsa}
-                        className={cn(
-                          'flex items-center gap-3 rounded-xl border p-3 text-left transition disabled:opacity-50',
-                          selected === m.id
-                            ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-500/30'
-                            : 'border-slate-200 hover:border-brand-300',
-                        )}
-                      >
-                        <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-gradient-to-br text-xs font-bold text-white', m.warna)}>
-                          {m.logo}
-                        </span>
-                        <span className="flex-1 text-sm font-medium text-slate-700">{m.nama}</span>
-                        <span className={cn('grid h-5 w-5 place-items-center rounded-full border-2', selected === m.id ? 'border-brand-600 bg-brand-600' : 'border-slate-300')}>
-                          {selected === m.id && <span className="h-2 w-2 rounded-full bg-white" />}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            <h2 className="mb-4 text-lg font-bold text-slate-900">Metode Pembayaran</h2>
+            <div className="flex items-start gap-4 rounded-xl border border-brand-200 bg-brand-50/60 p-4">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white">
+                QRIS
+              </span>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-800">QRIS</p>
+                <p className="mt-0.5 text-sm text-slate-600">
+                  Scan pakai aplikasi bank atau e-wallet apa pun yang mendukung QRIS.
+                </p>
+              </div>
             </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Metode dipilih di halaman pembayaran. Kode QRIS muncul setelah kamu menekan tombol bayar.
+            </p>
           </Card>
 
           <Card className="mt-6 p-5">
@@ -193,10 +168,9 @@ export default function Payment() {
                 <span className="text-lg font-bold text-brand-700">{formatRupiah(order.total)}</span>
               </div>
             </div>
-            <Button className="mt-5 w-full" size="lg" disabled={!selected || kadaluarsa || processing} onClick={handlePay}>
+            <Button className="mt-5 w-full" size="lg" disabled={kadaluarsa || processing} onClick={handlePay}>
               {processing ? 'Memproses...' : 'Bayar Sekarang'} <ChevronRight size={18} />
             </Button>
-            {!selected && !kadaluarsa && <p className="mt-2 text-center text-xs text-slate-400">Pilih metode bayar dulu</p>}
             {payError && <p className="mt-2 text-center text-xs font-medium text-rose-600">{payError}</p>}
             <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400">
               {providerLabel ? (
