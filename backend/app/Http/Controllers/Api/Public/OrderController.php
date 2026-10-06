@@ -61,7 +61,18 @@ class OrderController extends Controller
             $answers = $field->ticket_type_id
                 ? ($ticketAnswers[(string) $field->ticket_type_id] ?? [])
                 : $orderAnswers;
-            $value = $answers[$field->label] ?? null;
+
+            // Cari nilai jawaban berdasarkan label asli, label lowercase, atau key
+            $key = strtolower($field->key ?: $field->label);
+            $value = $answers[$field->label]
+                ?? $answers[$field->key ?? '']
+                ?? ($answers[$key] ?? null)
+                ?? ($answers[strtolower($field->label)] ?? null);
+
+            // Jika field order-level adalah sosial standar, fallback ke kolom root order (data.instagram, dll)
+            if (! $field->ticket_type_id && in_array($key, ['instagram', 'tiktok', 'threads'], true)) {
+                $value = $value ?: ($data[$key] ?? null);
+            }
 
             if ($field->wajib && ($value === null || trim((string) $value) === '')) {
                 $fieldErrors["form_data.{$field->id}"] = "{$field->label} wajib diisi.";

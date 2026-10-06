@@ -70,6 +70,7 @@ export default function Checkout() {
   const [voucherCode, setVoucherCode] = useState('')
   const [voucher, setVoucher] = useState(draft?.voucher || null)
   const [voucherMsg, setVoucherMsg] = useState(null)
+  const [checkoutError, setCheckoutError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [pendingOrder, setPendingOrder] = useState(null)
   const [paying, setPaying] = useState(false)
@@ -136,6 +137,7 @@ export default function Checkout() {
   }
 
   const handleCheckout = async () => {
+    setCheckoutError(null)
     if (!validate()) return
     updateDraft({ items, event, buyer: form, voucher })
     const cartTicketIds = new Set(items.map((it) => Number(it.ticketId ?? it.id)))
@@ -143,8 +145,8 @@ export default function Checkout() {
     const orderLevel = {}
     const perTicket = {}
     for (const f of relevantFields) {
-      if (STANDARD_SOCIAL.includes(f.key) && !f.ticket_type_id) continue
-      const value = form[formFieldKey(f)] || ''
+      const key = formFieldKey(f)
+      const value = form[key] ?? form[f.key] ?? form[f.label] ?? ''
       if (f.ticket_type_id) {
         perTicket[String(f.ticket_type_id)] = { ...(perTicket[String(f.ticket_type_id)] || {}), [f.label]: value }
       } else {
@@ -154,14 +156,21 @@ export default function Checkout() {
     const formData = {}
     if (Object.keys(orderLevel).length) formData.order = orderLevel
     if (Object.keys(perTicket).length) formData.tickets = perTicket
+
+    const getSocialVal = (socialKey) => {
+      if (form[socialKey]) return form[socialKey]
+      const found = relevantFields.find((f) => !f.ticket_type_id && (f.key === socialKey || f.label.toLowerCase() === socialKey))
+      return found ? (form[formFieldKey(found)] || null) : null
+    }
+
     const payload = {
       event_id: event.id,
       nama: form.nama,
       email: form.email,
       whatsapp: form.whatsapp,
-      instagram: form.instagram || null,
-      tiktok: form.tiktok || null,
-      threads: form.threads || null,
+      instagram: getSocialVal('instagram'),
+      tiktok: getSocialVal('tiktok'),
+      threads: getSocialVal('threads'),
       form_data: formData,
       voucher_code: voucher?.kode || null,
       items: items.map((it) => ({ ticket_type_id: it.ticketId ?? it.id, jumlah: it.jumlah })),
@@ -172,7 +181,20 @@ export default function Checkout() {
       const created = await createOrder(payload)
       setPendingOrder(created)
     } catch (err) {
-      setVoucherMsg({ type: 'error', text: err.message })
+      if (err.errors) {
+        const fieldErrMap = {}
+        for (const [errKey, messages] of Object.entries(err.errors)) {
+          const msg = Array.isArray(messages) ? messages[0] : messages
+          const matchField = allFields.find((f) => `form_data.${f.id}` === errKey || f.key === errKey || f.label === errKey)
+          if (matchField) {
+            fieldErrMap[formFieldKey(matchField)] = msg
+          } else {
+            fieldErrMap[errKey] = msg
+          }
+        }
+        setErrors((prev) => ({ ...prev, ...fieldErrMap }))
+      }
+      setCheckoutError(err.message || 'Gagal memproses pesanan. Periksa kembali data formulir.')
     } finally {
       setSubmitting(false)
     }
@@ -337,8 +359,14 @@ export default function Checkout() {
               </div>
             </div>
 
+            {checkoutError && (
+              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-medium text-rose-700">
+                {checkoutError}
+              </div>
+            )}
+
             <Button className="mt-5 w-full" size="lg" onClick={handleCheckout} disabled={submitting}>
-              <TicketIcon size={18} /> Checkout
+              <TicketIcon size={18} /> {submitting ? 'Memproses...' : 'Checkout'}
             </Button>
             <p className="mt-3 text-center text-xs text-slate-400">
               Dengan checkout kamu menyetujui Syarat & Ketentuan Nontix.
