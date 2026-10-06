@@ -146,11 +146,9 @@ export default function PaymentSuccess() {
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            {/* Tombol e-ticket disembunyikan sementara (QR diperbaiki) */}
-            {/* <Link to="/tiket/saya"><Button size="lg" className="w-full"><TicketIcon size={18} /> Lihat E-Ticket</Button></Link> */}
-            <Link to="/invoice"><Button size="lg" className="w-full"><FileText size={18} /> Lihat Invoice</Button></Link>
+            <Link to="/tiket/saya"><Button size="lg" className="w-full"><TicketIcon size={18} /> Lihat E-Ticket</Button></Link>
+            <Link to="/invoice"><Button size="lg" variant="secondary" className="w-full"><FileText size={18} /> Lihat Invoice</Button></Link>
           </div>
-          <p className="mt-3 text-center text-sm text-slate-500">E-Ticket akan segera tersedia. Detail tiket tetap terkirim ke emailmu.</p>
           <Link to="/" className="mt-3 block">
             <Button variant="ghost" className="w-full"><Home size={16} /> Kembali ke Beranda</Button>
           </Link>

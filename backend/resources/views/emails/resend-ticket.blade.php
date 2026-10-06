@@ -42,9 +42,7 @@
             @endforeach
 
             <div style="margin-top:20px;">
-                {{-- Tombol e-ticket disembunyikan sementara (QR diperbaiki) --}}
-                {{-- <a href="{{ $frontendUrl }}/tiket/saya?kode={{ urlencode($order->kode_order) }}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-size:14px;">Lihat E-Ticket</a> --}}
-                <p style="margin:0;font-size:13px;color:#64748b;">Detail tiket lengkap tersedia di email ini.</p>
+                <a href="{{ $frontendUrl }}/tiket/saya?kode={{ urlencode($order->kode_order) }}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-size:14px;">Lihat E-Ticket</a>
             </div>
 
             <p style="margin:24px 0 0;font-size:12px;color:#94a3b8;">

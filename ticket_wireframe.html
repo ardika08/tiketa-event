@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wireframe E-Ticket Nontix</title>
+  <style>
+    :root {
+      --brand: #4f46e5;
+      --brand-dark: #3730a3;
+      --accent: #06b6d4;
+      --slate-900: #0f172a;
+      --slate-700: #334155;
+      --slate-500: #64748b;
+      --slate-200: #e2e8f0;
+      --slate-100: #f1f5f9;
+      --slate-50: #f8fafc;
+      --bg: #0c0b10;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--slate-900);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    .ticket-container {
+      width: 100%;
+      max-width: 420px;
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* 1. Header Banner */
+    .ticket-header {
+      background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+      color: #ffffff;
+      padding: 24px 20px 20px;
+      position: relative;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .brand-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 4px 10px;
+      border-radius: 999px;
+      backdrop-filter: blur(4px);
+    }
+
+    .order-code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0.9;
+    }
+
+    .event-title {
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-bottom: 6px;
+      letter-spacing: -0.01em;
+    }
+
+    .event-meta {
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.85);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 2. Passenger / Attendee Section */
+    .ticket-body {
+      padding: 20px 22px 14px;
+    }
+
+    .info-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--slate-500);
+      margin-bottom: 3px;
+    }
+
+    .attendee-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--slate-200);
+    }
+
+    .attendee-name {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--slate-900);
+    }
+
+    .ticket-badge {
+      font-size: 11px;
+      font-weight: 700;
+      background: #eef2ff;
+      color: var(--brand);
+      padding: 4px 10px;
+      border-radius: 8px;
+      border: 1px solid #c7d2fe;
+    }
+
+    /* 3. Event Key Details (3 Columns) */
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      margin-top: 16px;
+      background: var(--slate-50);
+      border-radius: 12px;
+      border: 1px solid var(--slate-200);
+      overflow: hidden;
+    }
+
+    .detail-cell {
+      padding: 10px 10px;
+      text-align: center;
+      border-right: 1px solid var(--slate-200);
+    }
+
+    .detail-cell:last-child {
+      border-right: none;
+    }
+
+    .detail-cell .cell-val {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--slate-900);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .detail-cell .cell-sub {
+      font-size: 10px;
+      color: var(--slate-500);
+      margin-top: 1px;
+    }
+
+    /* Perforation / Notches */
+    .perforation {
+      position: relative;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      background: transparent;
+      margin: 4px 0;
+    }
+
+    .perforation::before,
+    .perforation::after {
+      content: "";
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      background-color: var(--bg);
+      border-radius: 50%;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .perforation::before {
+      left: -12px;
+    }
+
+    .perforation::after {
+      right: -12px;
+    }
+
+    .perforation-line {
+      width: 100%;
+      border-top: 2px dashed #cbd5e1;
+      margin: 0 16px;
+    }
+
+    /* 4. Highlighted QR Code Section (CENTER) */
+    .qr-section {
+      padding: 4px 22px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .qr-badge-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--brand);
+      margin-bottom: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .qr-box {
+      background: #ffffff;
+      padding: 14px;
+      border-radius: 16px;
+      border: 2px solid var(--slate-200);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      display: inline-block;
+    }
+
+    .qr-box svg {
+      display: block;
+      width: 175px;
+      height: 175px;
+    }
+
+    .ticket-code-display {
+      margin-top: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--slate-900);
+      background: var(--slate-100);
+      padding: 5px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--slate-200);
+    }
+
+    .qr-hint {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--slate-500);
+    }
+
+    /* 5. Footer / Barcode Slip */
+    .ticket-footer {
+      background: var(--slate-50);
+      border-top: 1px solid var(--slate-200);
+      padding: 14px 20px;
+      text-align: center;
+    }
+
+    .barcode-svg {
+      width: 100%;
+      max-width: 260px;
+      height: 38px;
+      margin: 0 auto;
+      display: block;
+    }
+
+    .footer-note {
+      font-size: 10px;
+      color: var(--slate-500);
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ticket-container">
+    <!-- 1. Header Banner -->
+    <div class="ticket-header">
+      <div class="brand-row">
+        <span class="brand-badge">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <rect x="2" y="7" width="20" height="15" rx="2" ry="2"/>
+            <polyline points="17 2 12 7 7 2"/>
+          </svg>
+          Nontix Pass
+        </span>
+        <span class="order-code">NTX-PRHPUF</span>
+      </div>
+      <h1 class="event-title">Workshop Kehamilan &amp; Parent Club 2026</h1>
+      <p class="event-meta">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+        Sabtu, 24 Oktober 2026 • 09:00 WIB
+      </p>
+    </div>
+
+    <!-- 2. Body Details -->
+    <div class="ticket-body">
+      <div class="attendee-row">
+        <div>
+          <p class="info-label">Pemegang Tiket</p>
+          <p class="attendee-name">Ardika Yudha</p>
+        </div>
+        <div class="ticket-badge">
+          Workshop VIP
+        </div>
+      </div>
+
+      <!-- 3 Columns Event Info -->
+      <div class="details-grid">
+        <div class="detail-cell">
+          <p class="info-label">Jam Masuk</p>
+          <p class="cell-val">08:30 WIB</p>
+          <p class="cell-sub">Gate dibuka</p>
+        </div>
+        <div class="detail-cell">
+          <p class="info-label">Pintu / Gate</p>
+          <p class="cell-val">Gate A2</p>
+          <p class="cell-sub">Lantai 1</p>
+        </div>
+        <div class="detail-cell">
+          <p class="info-label">Lokasi</p>
+          <p class="cell-val">Ballroom Grand</p>
+          <p class="cell-sub">Jakarta Pusat</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Perforation Notch Line -->
+    <div class="perforation">
+      <div class="perforation-line"></div>
+    </div>
+
+    <!-- 4. Highlighted QR Code Section (CENTER) -->
+    <div class="qr-section">
+      <span class="qr-badge-title">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+          <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+          <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+          <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+        </svg>
+        Pindai Untuk Check-In
+      </span>
+
+      <div class="qr-box">
+        <!-- SVG QR Code Vector (Crisp, High Res, No Blur) -->
+        <svg viewBox="0 0 100 100" shape-rendering="crispEdges">
+          <rect width="100" height="100" fill="#ffffff"/>
+          <!-- Position Detection Patterns (Top-Left) -->
+          <rect x="10" y="10" width="28" height="28" fill="#0f172a"/>
+          <rect x="14" y="14" width="20" height="20" fill="#ffffff"/>
+          <rect x="18" y="18" width="12" height="12" fill="#0f172a"/>
+          <!-- Position Detection Patterns (Top-Right) -->
+          <rect x="62" y="10" width="28" height="28" fill="#0f172a"/>
+          <rect x="66" y="14" width="20" height="20" fill="#ffffff"/>
+          <rect x="70" y="18" width="12" height="12" fill="#0f172a"/>
+          <!-- Position Detection Patterns (Bottom-Left) -->
+          <rect x="10" y="62" width="28" height="28" fill="#0f172a"/>
+          <rect x="14" y="66" width="20" height="20" fill="#ffffff"/>
+          <rect x="18" y="70" width="12" height="12" fill="#0f172a"/>
+          <!-- Data Modules Pattern Mockup -->
+          <rect x="42" y="10" width="4" height="8" fill="#0f172a"/>
+          <rect x="50" y="10" width="8" height="4" fill="#0f172a"/>
+          <rect x="42" y="22" width="6" height="6" fill="#0f172a"/>
+          <rect x="52" y="20" width="6" height="4" fill="#0f172a"/>
+          <rect x="10" y="42" width="8" height="4" fill="#0f172a"/>
+          <rect x="22" y="42" width="4" height="6" fill="#0f172a"/>
+          <rect x="30" y="42" width="6" height="4" fill="#0f172a"/>
+          <rect x="42" y="42" width="16" height="16" fill="#0f172a"/>
+          <rect x="46" y="46" width="8" height="8" fill="#ffffff"/>
+          <rect x="48" y="48" width="4" height="4" fill="#0f172a"/>
+          <rect x="62" y="42" width="8" height="4" fill="#0f172a"/>
+          <rect x="74" y="42" width="4" height="6" fill="#0f172a"/>
+          <rect x="82" y="42" width="8" height="4" fill="#0f172a"/>
+          <rect x="10" y="50" width="4" height="8" fill="#0f172a"/>
+          <rect x="26" y="52" width="8" height="4" fill="#0f172a"/>
+          <rect x="62" y="50" width="4" height="8" fill="#0f172a"/>
+          <rect x="70" y="52" width="8" height="4" fill="#0f172a"/>
+          <rect x="82" y="50" width="8" height="8" fill="#0f172a"/>
+          <rect x="42" y="62" width="8" height="4" fill="#0f172a"/>
+          <rect x="54" y="62" width="4" height="6" fill="#0f172a"/>
+          <rect x="42" y="70" width="6" height="4" fill="#0f172a"/>
+          <rect x="52" y="70" width="6" height="6" fill="#0f172a"/>
+          <rect x="62" y="62" width="4" height="4" fill="#0f172a"/>
+          <rect x="70" y="62" width="8" height="4" fill="#0f172a"/>
+          <rect x="82" y="62" width="8" height="8" fill="#0f172a"/>
+          <rect x="62" y="70" width="6" height="6" fill="#0f172a"/>
+          <rect x="72" y="72" width="6" height="4" fill="#0f172a"/>
+          <rect x="42" y="82" width="8" height="8" fill="#0f172a"/>
+          <rect x="54" y="82" width="4" height="8" fill="#0f172a"/>
+          <rect x="62" y="82" width="8" height="4" fill="#0f172a"/>
+          <rect x="74" y="82" width="6" height="8" fill="#0f172a"/>
+          <rect x="84" y="84" width="6" height="6" fill="#0f172a"/>
+        </svg>
+      </div>
+
+      <div class="ticket-code-display">
+        TIX-984210-WSHP
+      </div>
+      <p class="qr-hint">Tunjukkan QR code ini ke petugas scanner saat memasuki venue</p>
+    </div>
+
+    <!-- 5. Footer -->
+    <div class="ticket-footer">
+      <p class="footer-note">Tiket resmi diterbitkan oleh Nontix • Tunjukkan tiket ini bersama kartu identitas yang sah</p>
+    </div>
+  </div>
+
+</body>
+</html>
