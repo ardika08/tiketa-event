@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { Menu, X, Ticket, Search, Instagram, Facebook, Linkedin } from 'lucide-react'
 import { Button } from '../components/ui'
-import { cn, formatRupiah } from '../lib/utils'
-import { BIAYA_LAYANAN } from '../lib/constants'
+import { cn } from '../lib/utils'
 
 const NAV = [
   { to: '/', label: 'Jelajahi Event' },
@@ -140,12 +139,9 @@ export default function PublicLayout() {
           </div>
         </div>
         <div className="border-t border-slate-800 py-6">
-          <div className="container-page flex flex-col items-center gap-2 text-center text-xs text-slate-400 sm:flex-row sm:justify-between sm:text-left">
-            <p>
-              © {new Date().getFullYear()} <span className="font-semibold text-slate-300">Nontix</span> — PT. DIARMA AKSARA MEDIA. Seluruh hak cipta dilindungi.
-            </p>
-            <p className="shrink-0">Biaya layanan {formatRupiah(BIAYA_LAYANAN)}/tiket.</p>
-          </div>
+          <p className="container-page text-center text-xs text-slate-400">
+            © {new Date().getFullYear()} <span className="font-semibold text-slate-300">Nontix</span> — PT. DIARMA AKSARA MEDIA. Seluruh hak cipta dilindungi.
+          </p>
         </div>
       </footer>
     </div>
