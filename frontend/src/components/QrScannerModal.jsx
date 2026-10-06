@@ -92,7 +92,7 @@ export default function QrScannerModal({
 }) {
   const scannerRef = useRef(null)
   const decodedRef = useRef(onDecoded)
-  const lastRef = useRef({ kode: '', at: 0 })
+  const lastRef = useRef(null)
   const busyRef = useRef(false)
   const genRef = useRef(0)
 
@@ -108,14 +108,13 @@ export default function QrScannerModal({
   const handleDecoded = useCallback(async (text) => {
     const kode = String(text || '').trim()
     if (!kode || busyRef.current) return
-
-    const now = Date.now()
-    if (kode === lastRef.current.kode && now - lastRef.current.at < 2500) return
-    lastRef.current = { kode, at: now }
+    // QR yang sama masih di depan kamera → jangan tampilkan ulang (cegah beep beruntun).
+    // Di-reset hanya saat QR keluar dari frame (lihat handleMiss).
+    if (kode === lastRef.current) return
+    lastRef.current = kode
     busyRef.current = true
 
     setFlash({ status: 'pending', kode, message: 'Memeriksa tiket…' })
-    try { scannerRef.current?.pause(false) } catch { /* noop */ }
 
     let res = null
     try {
@@ -130,11 +129,17 @@ export default function QrScannerModal({
     vibrate(ok)
     setFlash({ status, kode, message: res?.message, ticket: res?.ticket })
 
+    // Petugas butuh waktu membaca detail pemegang tiket → tahan 3 detik.
     window.setTimeout(() => {
       setFlash(null)
       busyRef.current = false
-      try { scannerRef.current?.resume() } catch { /* noop */ }
-    }, ok ? 1300 : 2100)
+    }, ok ? 3000 : 2400)
+  }, [])
+
+  /* --- Tidak ada QR di frame → siap memindai kode berikutnya --- */
+  const handleMiss = useCallback(() => {
+    if (busyRef.current) return
+    lastRef.current = null
   }, [])
 
   /* --- Nyalakan kamera --- */
@@ -158,7 +163,7 @@ export default function QrScannerModal({
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         },
         handleDecoded,
-        () => { /* error per-frame (QR tidak terbaca) — abaikan */ },
+        handleMiss,
       )
       return true
     } catch (err) {
@@ -167,14 +172,14 @@ export default function QrScannerModal({
     } finally {
       setStarting(false)
     }
-  }, [handleDecoded])
+  }, [handleDecoded, handleMiss])
 
   /* --- Hidup/mati mengikuti status modal --- */
   useEffect(() => {
     if (!open) return undefined
     let cancelled = false
     busyRef.current = false
-    lastRef.current = { kode: '', at: 0 }
+    lastRef.current = null
     setError(null)
     setFlash(null)
     setCameras([])

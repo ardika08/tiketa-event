@@ -167,6 +167,15 @@ h5 {
 }
 
 /* Video kamera harus memenuhi area viewfinder tanpa distorsi */
+
+/* html5-qrcode menyuntik `position: relative` inline ke container reader,
+   sehingga reader jadi ikut alur dokumen dan tingginya mengikuti rasio video
+   (16:9) — menyisakan celah hitam di bawah viewfinder. Paksa tetap mengisi penuh. */
+#nontix-qr-reader {
+  position: absolute !important;
+  inset: 0 !important;
+}
+
 #nontix-qr-reader video {
   width: 100% !important;
   height: 100% !important;

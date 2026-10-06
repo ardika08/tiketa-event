@@ -154,7 +154,11 @@ export default function Attendance() {
                     <td className="px-5 py-3 text-slate-600">{formatTanggal(c.checked_in_at, { withTime: true })}</td>
                     <td className="px-5 py-3">
                       <StatusBadge status={c.status} />
-                      {c.catatan && <p className="mt-0.5 text-xs text-rose-500">{c.catatan}</p>}
+                      {c.catatan && (
+                        <p className={cn('mt-0.5 text-xs', c.status === 'berhasil' ? 'text-emerald-600' : 'text-rose-500')}>
+                          {c.catatan}
+                        </p>
+                      )}
                     </td>
                   </tr>
                 ))}
