@@ -13,6 +13,7 @@ class FormField extends Model
     protected $fillable = [
         'organizer_id',
         'event_id',
+        'ticket_type_id',
         'label',
         'key',
         'tipe',
@@ -31,6 +32,11 @@ class FormField extends Model
     public function event(): BelongsTo
     {
         return $this->belongsTo(Event::class);
+    }
+
+    public function ticketType(): BelongsTo
+    {
+        return $this->belongsTo(TicketType::class);
     }
 
     public function organizer(): BelongsTo

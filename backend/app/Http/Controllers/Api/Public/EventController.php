@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Public;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
+use App\Models\FormField;
 use Illuminate\Http\Request;
 
 class EventController extends Controller
@@ -30,6 +31,19 @@ class EventController extends Controller
             ->where('slug', $slug)
             ->with(['organizer', 'sessions', 'ticketTypes.sessions', 'seatPlan', 'formFields'])
             ->firstOrFail();
+
+        // Field organizer-level (event_id NULL) berlaku untuk semua event milik
+        // organizer ini — digabung dengan field spesifik event, urut sesuai `urutan`.
+        $organizerFields = FormField::where('organizer_id', $event->organizer_id)
+            ->whereNull('event_id')
+            ->where('status', 'aktif')
+            ->orderBy('urutan')
+            ->get();
+
+        $event->setRelation(
+            'formFields',
+            $event->formFields->concat($organizerFields)->sortBy('urutan')->values(),
+        );
 
         return new EventResource($event);
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Partner;
 
 use App\Models\Event;
 use App\Models\FormField;
+use App\Models\TicketType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -27,12 +28,10 @@ class FormFieldController extends PartnerController
             'wajib' => ['nullable', 'boolean'],
             'urutan' => ['nullable', 'integer', 'min:1'],
             'event_id' => ['nullable', 'exists:events,id'],
+            'ticket_type_id' => ['nullable', 'exists:ticket_types,id'],
         ]);
 
-        if (! empty($data['event_id'])) {
-            $owned = Event::where('organizer_id', $this->organizerId($request))->whereKey($data['event_id'])->exists();
-            abort_if(! $owned, 403, 'Event tidak valid.');
-        }
+        $this->authorizeTargets($request, $data);
 
         $data['key'] = Str::slug($data['label'], '_') ?: 'field';
         $data['organizer_id'] = $this->organizerId($request);
@@ -52,7 +51,11 @@ class FormFieldController extends PartnerController
             'wajib' => ['nullable', 'boolean'],
             'urutan' => ['nullable', 'integer', 'min:1'],
             'status' => ['nullable', 'in:aktif,nonaktif'],
+            'event_id' => ['nullable', 'exists:events,id'],
+            'ticket_type_id' => ['nullable', 'exists:ticket_types,id'],
         ]);
+
+        $this->authorizeTargets($request, $data);
 
         if (array_key_exists('label', $data)) {
             $data['key'] = Str::slug($data['label'], '_') ?: 'field';
@@ -69,5 +72,29 @@ class FormFieldController extends PartnerController
         $formField->delete();
 
         return response()->json(['message' => 'Field dihapus.']);
+    }
+
+    /**
+     * Field hanya boleh menunjuk ke event/tiket milik organizer yang sama.
+     * ticket_type_id wajib satu event dengan event_id field (bila keduanya terisi).
+     */
+    private function authorizeTargets(Request $request, array $data): void
+    {
+        $organizerId = $this->organizerId($request);
+
+        if (! empty($data['event_id'])) {
+            $owned = Event::where('organizer_id', $organizerId)->whereKey($data['event_id'])->exists();
+            abort_if(! $owned, 403, 'Event tidak valid.');
+        }
+
+        if (! empty($data['ticket_type_id'])) {
+            $ticketType = TicketType::whereHas('event', fn ($q) => $q->where('organizer_id', $organizerId))
+                ->find($data['ticket_type_id']);
+            abort_if(! $ticketType, 403, 'Jenis tiket tidak valid.');
+
+            if (! empty($data['event_id']) && (int) $ticketType->event_id !== (int) $data['event_id']) {
+                abort(422, 'Jenis tiket tidak termasuk dalam event tersebut.');
+            }
+        }
     }
 }

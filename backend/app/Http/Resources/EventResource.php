@@ -29,6 +29,18 @@ class EventResource extends JsonResource
             ]),
             'sessions' => EventSessionResource::collection($this->whenLoaded('sessions')),
             'tiket' => TicketTypeResource::collection($this->whenLoaded('ticketTypes')),
+            'formFields' => $this->whenLoaded('formFields', fn () => $this->formFields
+                ->where('status', 'aktif')
+                ->values()
+                ->map(fn ($f) => [
+                    'id' => $f->id,
+                    'label' => $f->label,
+                    'key' => $f->key,
+                    'tipe' => $f->tipe,
+                    'wajib' => (bool) $f->wajib,
+                    'urutan' => $f->urutan,
+                    'ticket_type_id' => $f->ticket_type_id,
+                ])),
             'total_sisa_kuota' => $this->whenLoaded('ticketTypes', fn () => (int) $this->ticketTypes->sum('sisa_kuota')),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
