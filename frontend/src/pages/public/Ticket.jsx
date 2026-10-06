@@ -146,7 +146,7 @@ export default function Ticket() {
         </span>
         <div className="min-w-0">
           <p className="text-base font-bold leading-tight text-slate-900">
-            <span className="text-brand-700">{jumlahTiket}</span> E-Ticket
+            <span className="text-brand-700">{jumlahTiket} tiket</span> dalam pesanan ini
           </p>
           <p className="truncate text-[11px] text-slate-500">Pesanan {order.kode_order}</p>
         </div>
