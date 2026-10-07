@@ -1,9 +1,10 @@
 import { Fragment, useMemo, useState } from 'react'
-import { Search, Download, Users, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
+import { Search, Download, Send, Loader2, CheckCircle2, AlertCircle, Users, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { Button, Card, Input, PageHeader, Select, StatusBadge, EmptyState } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
+import { downloadCsv, namaFileCsv } from '../../lib/csv'
 
 const PER_PAGE = 6
 
@@ -61,6 +62,8 @@ export default function Buyers() {
   const [status, setStatus] = useState('all')
   const [expanded, setExpanded] = useState(null)
   const [page, setPage] = useState(1)
+  const [sending, setSending] = useState(null)
+  const [notif, setNotif] = useState(null)
 
   const { data, loading } = useApi(() => partnerApi.buyers(), [])
   const { data: eventsData } = useApi(() => partnerApi.events(), [])
@@ -82,13 +85,52 @@ export default function Buyers() {
   const current = Math.min(page, totalPages)
   const rows = filtered.slice((current - 1) * PER_PAGE, current * PER_PAGE)
 
+  // Kirim ulang e-ticket ke alamat pembeli yang terdaftar. Backend yang
+  // menentukan tujuan pengiriman, jadi alamat tidak bisa dipalsukan dari sini.
+  async function kirimUlang(order) {
+    setSending(order.id)
+    setNotif(null)
+    try {
+      const res = await partnerApi.resendTicket(order.id)
+      setNotif({ ok: true, text: res?.message || `E-ticket dikirim ulang ke ${order.email}.` })
+    } catch (e) {
+      setNotif({ ok: false, text: e?.message || 'Gagal mengirim ulang e-ticket.' })
+    } finally {
+      setSending(null)
+    }
+  }
+
+  // Ekspor CSV dari baris yang sedang tampil (ikut filter & pencarian),
+  // supaya isi berkasnya sama dengan yang dilihat partner di layar.
+  function ekspor() {
+    const header = ['Kode Pesanan', 'Nama Pembeli', 'Email', 'WhatsApp', 'Instagram', 'TikTok', 'Threads', 'Event', 'Tiket', 'Jumlah', 'Total', 'Status', 'Tanggal']
+    const body = filtered.map((b) => [
+      b.kode_order, b.nama, b.email, b.whatsapp, b.instagram, b.tiktok, b.threads,
+      b.event, b.tiket, b.jumlah, b.total, b.status, formatTanggal(b.tanggal, { withTime: true }),
+    ])
+    downloadCsv(namaFileCsv('data-pembeli'), [header, ...body])
+  }
+
   return (
     <div>
       <PageHeader
         title="Data Pembeli"
         description={`Semua pesanan tiket beserta kontaknya. ${jumlahLunas} dari ${buyers.length} sudah lunas. Klik baris untuk melihat jawaban formulir.`}
-        action={<Button variant="secondary"><Download size={16} /> Ekspor</Button>}
+        action={
+          <Button variant="secondary" onClick={ekspor} disabled={filtered.length === 0}>
+            <Download size={16} /> Ekspor
+          </Button>
+        }
       />
+
+      {notif && (
+        <div className={`mb-4 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${notif.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+          {notif.ok
+            ? <CheckCircle2 size={17} className="mt-0.5 shrink-0" />
+            : <AlertCircle size={17} className="mt-0.5 shrink-0" />}
+          <span>{notif.text}</span>
+        </div>
+      )}
 
       <Card className="mb-4 p-4">
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -125,6 +167,7 @@ export default function Buyers() {
                   <th className="px-5 py-3 font-semibold">Tiket</th>
                   <th className="px-5 py-3 font-semibold">Total</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
+                  <th className="px-5 py-3 font-semibold">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -160,10 +203,27 @@ export default function Buyers() {
                           <p className="mt-0.5 text-xs text-amber-600">Bayar s/d {formatTanggal(b.batas_bayar, { withTime: true })}</p>
                         )}
                       </td>
+                      <td className="px-5 py-3">
+                        {b.status === 'lunas' ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={sending === b.id}
+                            onClick={(e) => { e.stopPropagation(); kirimUlang(b) }}
+                          >
+                            {sending === b.id
+                              ? <Loader2 size={15} className="animate-spin" />
+                              : <Send size={15} />}
+                            Kirim Ulang
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
+                      </td>
                     </tr>
                     {expanded === b.id && (
                       <tr>
-                        <td colSpan={5} className="bg-brand-50/40 px-5 py-4">
+                        <td colSpan={6} className="bg-brand-50/40 px-5 py-4">
                           <FormDataPanel order={b} />
                         </td>
                       </tr>

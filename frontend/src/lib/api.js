@@ -170,6 +170,7 @@ export const partnerApi = {
 
   analytics: (params) => api.get(`/partner/analytics${query(params)}`),
   buyers: () => api.get('/partner/buyers'),
+  resendTicket: (orderId) => api.post(`/partner/orders/${orderId}/resend`),
   finance: () => api.get('/partner/finance'),
   sales: () => api.get('/partner/sales'),
 

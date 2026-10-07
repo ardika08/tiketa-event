@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Partner\EventController as PartnerEventController;
 use App\Http\Controllers\Api\Partner\FormFieldController;
 use App\Http\Controllers\Api\Partner\GateController;
+use App\Http\Controllers\Api\Partner\OrderController as PartnerOrderController;
 use App\Http\Controllers\Api\Partner\PayoutController;
 use App\Http\Controllers\Api\Partner\ProfileController;
 use App\Http\Controllers\Api\Partner\ReportController as PartnerReportController;
@@ -42,7 +43,11 @@ Route::post('/orders', [PublicOrderController::class, 'store']);
 Route::get('/orders/{kodeOrder}', [PublicOrderController::class, 'show']);
 
 Route::get('/tickets', [PublicTicketController::class, 'show']);
-Route::post('/tickets/resend', [PublicTicketController::class, 'resend']);
+// Rate limit: endpoint publik ini mengirim e-mail ke alamat pembeli, jadi
+// tanpa batas ia bisa dipakai untuk membanjiri inbox seseorang (email bombing).
+// 3 percobaan / 10 menit per IP — cukup untuk pembeli yang salah ketik.
+Route::post('/tickets/resend', [PublicTicketController::class, 'resend'])
+    ->middleware('throttle:3,10');
 
 Route::get('/payments/gateways', [PublicPaymentController::class, 'gateways']);
 Route::post('/payments/callback', [PublicPaymentController::class, 'callback']);
@@ -110,6 +115,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/analytics', [PartnerReportController::class, 'analytics']);
         Route::get('/buyers', [PartnerReportController::class, 'buyers']);
+        // Kirim ulang e-ticket oleh partner (tombol di /partner/pembeli).
+        // Dibatasi 20x / 10 menit: cukup untuk membantu beberapa pembeli
+        // sekaligus, tetapi mencegah klik berulang yang tak sengaja.
+        Route::post('/orders/{order}/resend', [PartnerOrderController::class, 'resendTicket'])
+            ->middleware('throttle:20,10');
         Route::get('/finance', [PartnerReportController::class, 'finance']);
         Route::get('/sales', [PartnerReportController::class, 'sales']);
 

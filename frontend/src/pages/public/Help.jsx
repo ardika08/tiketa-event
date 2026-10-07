@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ChevronDown, LifeBuoy, Mail } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ChevronDown, LifeBuoy, Mail, Send } from 'lucide-react'
 import { Card } from '../../components/ui'
 import { cn, formatRupiah } from '../../lib/utils'
 import { BIAYA_LAYANAN } from '../../lib/constants'
@@ -15,7 +16,15 @@ const FAQ = [
   },
   {
     q: 'Saya tidak menerima email tiket, apa yang harus dilakukan?',
-    a: 'Cek folder spam terlebih dahulu. Jika tetap tidak ada, gunakan menu Kirim Ulang Tiket dengan memasukkan email atau kode pesananmu.',
+    a: (
+      <>
+        Cek folder spam terlebih dahulu. Jika tetap tidak ada, gunakan menu{' '}
+        <Link to="/tiket/kirim-ulang" className="font-semibold text-brand-700 underline underline-offset-2">
+          Kirim Ulang Tiket
+        </Link>{' '}
+        dengan memasukkan email atau kode pesananmu.
+      </>
+    ),
   },
   {
     q: 'Apakah tiket bisa dipindahtangankan?',
@@ -58,7 +67,13 @@ export default function Help() {
       <Card className="mt-8 p-6 text-center">
         <h2 className="font-bold text-slate-900">Masih butuh bantuan?</h2>
         <p className="mt-1 text-sm text-slate-500">Tim kami siap membantu setiap hari kerja, 09.00–18.00 WIB.</p>
-        <div className="mt-4 flex justify-center">
+        <div className="mt-4 flex flex-wrap justify-center gap-3">
+          <Link
+            to="/tiket/kirim-ulang"
+            className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-50"
+          >
+            <Send size={16} /> Kirim Ulang Tiket
+          </Link>
           <a href="mailto:info@diamcreative.com" className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
             <Mail size={16} /> info@diamcreative.com
           </a>

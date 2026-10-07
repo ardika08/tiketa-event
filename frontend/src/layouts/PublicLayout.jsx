@@ -126,7 +126,7 @@ export default function PublicLayout() {
             <ul className="mt-4 space-y-3 text-sm text-slate-300">
               <li><Link to="/partner/daftar" className="transition hover:text-white">Daftar Partner</Link></li>
               <li><Link to="/partner/masuk" className="transition hover:text-white">Masuk Dashboard</Link></li>
-              <li><Link to="/partner/dukungan" className="transition hover:text-white">Dukungan</Link></li>
+              <li><Link to="/partner/support" className="transition hover:text-white">Dukungan</Link></li>
             </ul>
           </div>
           <div>
