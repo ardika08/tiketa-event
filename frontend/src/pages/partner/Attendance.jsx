@@ -3,7 +3,8 @@ import { Search, Download, Users, CheckCircle2, Clock, CalendarDays } from 'luci
 import { Button, Card, Input, PageHeader, Stat, StatusBadge, EmptyState, Badge, ProgressBar, Select } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
-import { formatTanggal, cn } from '../../lib/utils'
+import { formatTanggal, cn, slugify } from '../../lib/utils'
+import { downloadCsv, namaFileCsv } from '../../lib/csv'
 
 export default function Attendance() {
   const [q, setQ] = useState('')
@@ -41,12 +42,42 @@ export default function Attendance() {
   const totalTiket = scope.reduce((s, x) => s + (x.total_pass || 0), 0)
   const persen = totalTiket ? Math.round((hadir / totalTiket) * 100) : 0
 
+  // Ekspor CSV asli dari baris yang sedang tampil (ikut filter sesi & pencarian).
+  const unduhLaporan = () => {
+    const namaEvent = events.find((e) => e.id === eventId)?.nama_event || 'event'
+    const labelSesi =
+      sessionFilter === 'all'
+        ? 'Semua sesi'
+        : sessions.find((s) => s.id === sessionFilter)?.label || '-'
+    const rows = [
+      [`Riwayat Kehadiran — ${namaEvent}`],
+      [`Filter sesi: ${labelSesi}`],
+      [`Jumlah baris: ${filtered.length}`],
+      [],
+      ['Nama Pemegang', 'Kode QR', 'Sesi', 'Gate', 'Waktu Check-in', 'Status', 'Catatan'],
+      ...filtered.map((c) => [
+        c.nama_pemegang,
+        c.kode_qr,
+        c.session?.label ?? '',
+        c.gate?.nama_gate ?? '',
+        c.checked_in_at ? formatTanggal(c.checked_in_at, { withTime: true }) : '',
+        c.status,
+        c.catatan ?? '',
+      ]),
+    ]
+    downloadCsv(namaFileCsv(`kehadiran-${slugify(namaEvent)}`), rows)
+  }
+
   return (
     <div>
       <PageHeader
         title="Riwayat Kehadiran"
         description="Pantau kehadiran per sesi/hari acara."
-        action={<Button variant="secondary"><Download size={16} /> Unduh Laporan</Button>}
+        action={
+          <Button variant="secondary" onClick={unduhLaporan} disabled={!filtered.length}>
+            <Download size={16} /> Unduh Laporan
+          </Button>
+        }
       />
 
       {events.length > 1 && (

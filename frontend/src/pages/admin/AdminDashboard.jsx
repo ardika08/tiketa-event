@@ -8,6 +8,7 @@ import { Card, PageHeader, Stat, StatusBadge, Badge, ProgressBar } from '../../c
 import { adminApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah } from '../../lib/utils'
+import { BIAYA_LAYANAN } from '../../lib/constants'
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
@@ -45,7 +46,7 @@ export default function AdminDashboard() {
         <Stat label="Total Event" value={(summary.total_event || 0).toLocaleString('id-ID')} icon={CalendarDays} color="brand" hint={`${summary.event_aktif || 0} event aktif`} />
         <Stat label="Mitra Terdaftar" value={(summary.total_mitra || 0).toLocaleString('id-ID')} icon={Handshake} color="blue" hint={`${summary.mitra_terverifikasi || 0} terverifikasi`} />
         <Stat label="Tiket Terjual" value={(summary.tiket_terjual || 0).toLocaleString('id-ID')} icon={Ticket} color="green" hint="Hanya pesanan lunas" />
-        <Stat label="Pendapatan Biaya Layanan" value={formatRupiah(summary.pendapatan_platform || 0)} icon={TrendingUp} color="amber" hint="Rp 2.000/tiket lunas" />
+        <Stat label="Pendapatan Biaya Layanan" value={formatRupiah(summary.pendapatan_platform || 0)} icon={TrendingUp} color="amber" hint={`${formatRupiah(BIAYA_LAYANAN)}/tiket lunas`} />
       </div>
 
       {(summary.transaksi_pending || 0) > 0 && (
@@ -63,7 +64,7 @@ export default function AdminDashboard() {
               <h2 className="font-bold text-slate-900">Pendapatan Platform</h2>
               <p className="text-sm text-slate-500">Pendapatan harian dari biaya layanan</p>
             </div>
-            <Badge color="brand">Biaya Rp 2.000/tiket</Badge>
+            <Badge color="brand">Biaya {formatRupiah(BIAYA_LAYANAN)}/tiket</Badge>
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">

@@ -4,6 +4,8 @@ import { Button, Card, PageHeader, Stat, Modal, Badge, Field, Input, Textarea, E
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
+import { BIAYA_LAYANAN } from '../../lib/constants'
+import { downloadCsv, namaFileCsv } from '../../lib/csv'
 
 export default function Finance() {
   const [exportOpen, setExportOpen] = useState(false)
@@ -76,6 +78,30 @@ export default function Finance() {
     }
   }
 
+  // Ekspor CSV asli dari data yang sudah tampil di halaman ini.
+  const unduhLaporan = () => {
+    const rows = [
+      ['RINGKASAN PER EVENT'],
+      ['Event', 'Tiket Terjual', 'Pendapatan Kotor', 'Biaya Layanan', 'Pendapatan Bersih'],
+      ...perEvent.map((e) => [e.event, e.tiket, e.kotor, e.biaya, e.bersih]),
+      ['TOTAL', summary.tiket, summary.kotor, summary.biaya, summary.bersih],
+      [],
+      ['RINCIAN TRANSAKSI LUNAS'],
+      ['Kode Pesanan', 'Tanggal Lunas', 'Event', 'Jumlah Tiket', 'Bruto', 'Biaya Layanan', 'Netto'],
+      ...transaksi.map((t) => [
+        t.kode_order,
+        t.tanggal ? formatTanggal(t.tanggal, { withTime: true }) : '',
+        t.event,
+        t.jumlah_tiket,
+        t.bruto,
+        t.biaya_layanan,
+        t.netto,
+      ]),
+    ]
+    downloadCsv(namaFileCsv('laporan-keuangan'), rows)
+    setDone(true)
+  }
+
   return (
     <div>
       <PageHeader
@@ -87,7 +113,7 @@ export default function Finance() {
       <div className="mb-6 flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
         <Info size={16} className="mt-0.5 shrink-0" />
         <p>
-          Nontix memotong biaya layanan <span className="font-semibold">Rp 2.000/tiket</span> dari setiap tiket yang terjual.
+          Nontix memotong biaya layanan <span className="font-semibold">{formatRupiah(BIAYA_LAYANAN)}/tiket</span> dari setiap tiket yang terjual.
           Sisanya (<span className="font-semibold">pendapatan bersih</span>) adalah milikmu dan bisa dicairkan ke rekening bank
           yang terdaftar di menu Profil. Hanya pesanan <span className="font-semibold">lunas</span> yang dihitung.
         </p>
@@ -95,7 +121,7 @@ export default function Finance() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Pendapatan Kotor" value={formatRupiah(summary.kotor)} icon={Wallet} color="blue" />
-        <Stat label="Biaya Layanan" value={formatRupiah(summary.biaya)} icon={TrendingDown} color="amber" hint={`${summary.tiket} tiket × Rp 2.000`} />
+        <Stat label="Biaya Layanan" value={formatRupiah(summary.biaya)} icon={TrendingDown} color="amber" hint={`${summary.tiket} tiket × ${formatRupiah(BIAYA_LAYANAN)}`} />
         <Stat label="Pemasukan Bersih" value={formatRupiah(summary.bersih)} icon={PiggyBank} color="green" />
         <Stat
           label="Saldo Bisa Dicairkan"
@@ -309,7 +335,7 @@ export default function Finance() {
           done ? <Button onClick={() => { setExportOpen(false); setDone(false) }}>Selesai</Button> : (
             <>
               <Button variant="secondary" onClick={() => setExportOpen(false)}>Batal</Button>
-              <Button onClick={() => setDone(true)}>Unduh CSV</Button>
+              <Button onClick={unduhLaporan}>Unduh CSV</Button>
             </>
           )
         }
@@ -317,22 +343,18 @@ export default function Finance() {
         {done ? (
           <div className="py-6 text-center">
             <p className="text-2xl">✅</p>
-            <p className="mt-2 font-semibold text-slate-800">File berhasil disiapkan</p>
-            <p className="text-sm text-slate-500">Laporan_keuangan.csv siap diunduh.</p>
+            <p className="mt-2 font-semibold text-slate-800">File berhasil diunduh</p>
+            <p className="text-sm text-slate-500">Cek folder Unduhan di perangkatmu.</p>
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-slate-600">Pilih format dan periode laporan yang ingin diunduh.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-slate-200 p-3">
-                <label className="text-xs font-semibold text-slate-500">Format</label>
-                <select className="input mt-1"><option>CSV</option><option>XLSX</option></select>
-              </div>
-              <div className="rounded-xl border border-slate-200 p-3">
-                <label className="text-xs font-semibold text-slate-500">Periode</label>
-                <select className="input mt-1"><option>Bulan ini</option><option>7 hari terakhir</option><option>Semua</option></select>
-              </div>
-            </div>
+            <p className="text-sm text-slate-600">
+              File CSV berisi data yang tampil di halaman ini: ringkasan per event dan rincian {transaksi.length} transaksi lunas.
+            </p>
+            <ul className="space-y-1 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
+              <li>• Ringkasan per event — tiket terjual, pendapatan kotor, biaya layanan, pendapatan bersih.</li>
+              <li>• Rincian transaksi lunas — kode pesanan, tanggal, jumlah tiket, bruto, biaya, netto.</li>
+            </ul>
           </div>
         )}
       </Modal>

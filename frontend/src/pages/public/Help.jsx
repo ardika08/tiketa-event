@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { ChevronDown, LifeBuoy, Mail, MessageCircle } from 'lucide-react'
+import { ChevronDown, LifeBuoy, Mail } from 'lucide-react'
 import { Card } from '../../components/ui'
-import { cn } from '../../lib/utils'
+import { cn, formatRupiah } from '../../lib/utils'
+import { BIAYA_LAYANAN } from '../../lib/constants'
 
 const FAQ = [
   {
@@ -22,7 +23,7 @@ const FAQ = [
   },
   {
     q: 'Berapa biaya layanan Nontix?',
-    a: 'Nontix hanya memungut biaya layanan Rp 2.000 per tiket terjual, dipotong otomatis dari harga tiket penyelenggara.',
+    a: `Nontix hanya memungut biaya layanan ${formatRupiah(BIAYA_LAYANAN)} per tiket terjual, dipotong otomatis dari harga tiket penyelenggara.`,
   },
 ]
 
@@ -57,12 +58,9 @@ export default function Help() {
       <Card className="mt-8 p-6 text-center">
         <h2 className="font-bold text-slate-900">Masih butuh bantuan?</h2>
         <p className="mt-1 text-sm text-slate-500">Tim kami siap membantu setiap hari kerja, 09.00–18.00 WIB.</p>
-        <div className="mt-4 flex flex-wrap justify-center gap-3">
-          <a href="mailto:support@nontix.id" className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
-            <Mail size={16} /> support@nontix.id
-          </a>
-          <a href="https://wa.me/6281200000000" className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <MessageCircle size={16} /> WhatsApp
+        <div className="mt-4 flex justify-center">
+          <a href="mailto:info@diamcreative.com" className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+            <Mail size={16} /> info@diamcreative.com
           </a>
         </div>
       </Card>

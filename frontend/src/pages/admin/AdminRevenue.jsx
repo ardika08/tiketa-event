@@ -35,7 +35,7 @@ export default function AdminRevenue() {
 
       <div className="mt-6 flex items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800">
         <Badge color="brand">Info</Badge>
-        Biaya layanan Nontix Rp 2.000/tiket dipotong otomatis dari harga tiket penyelenggara.
+        Biaya layanan Nontix {formatRupiah(BIAYA_LAYANAN)}/tiket dipotong otomatis dari harga tiket penyelenggara.
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">

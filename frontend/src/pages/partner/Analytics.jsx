@@ -7,6 +7,7 @@ import { Card, PageHeader, Stat, StatusBadge, ProgressBar } from '../../componen
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
+import { BIAYA_LAYANAN } from '../../lib/constants'
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
@@ -52,7 +53,7 @@ export default function Analytics() {
         <Stat label="Tiket Terjual" value={(summary.tiket_terjual || 0).toLocaleString('id-ID')} icon={Ticket} color="brand" />
         <Stat label="Pendapatan Kotor" value={formatRupiah(summary.pendapatan_kotor || 0)} icon={Wallet} color="green" />
         <Stat label="Pesanan Lunas" value={(summary.jumlah_order || 0).toLocaleString('id-ID')} icon={ShoppingCart} color="blue" />
-        <Stat label="Biaya Layanan" value={formatRupiah(summary.biaya_layanan || 0)} icon={TrendingUp} color="amber" hint="Rp 2.000/tiket" />
+        <Stat label="Biaya Layanan" value={formatRupiah(summary.biaya_layanan || 0)} icon={TrendingUp} color="amber" hint={`${formatRupiah(BIAYA_LAYANAN)}/tiket`} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">

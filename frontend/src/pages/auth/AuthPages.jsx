@@ -3,6 +3,8 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Ticket, ArrowRight, Check } from 'lucide-react'
 import { Button, Field, Input } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
+import { formatRupiah } from '../../lib/utils'
+import { BIAYA_LAYANAN } from '../../lib/constants'
 
 function AuthShell({ title, subtitle, children, footer, bullets }) {
   return (
@@ -30,7 +32,7 @@ function AuthShell({ title, subtitle, children, footer, bullets }) {
             ))}
           </ul>
         </div>
-        <p className="text-sm text-white/60">Biaya layanan Rp 2.000/tiket · Transparan & terjangkau</p>
+        <p className="text-sm text-white/60">Biaya layanan {formatRupiah(BIAYA_LAYANAN)}/tiket · Transparan & terjangkau</p>
       </div>
 
       <div className="flex items-center justify-center bg-slate-50 p-6">

@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom'
 import { Search, Ticket, Wallet, QrCode, ArrowRight, MapPin, CalendarDays, SlidersHorizontal, X, BadgeDollarSign, ScanLine, Landmark, TrendingUp, Users } from 'lucide-react'
 import { Button, EmptyState } from '../../components/ui'
 import EventCard from '../../components/EventCard'
-import { KATEGORI } from '../../lib/constants'
+import { KATEGORI, BIAYA_LAYANAN } from '../../lib/constants'
 import { publicApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { normalizeEvent } from '../../lib/normalize'
-import { cn } from '../../lib/utils'
+import { cn, formatRupiah } from '../../lib/utils'
 
 export default function Home() {
   const [q, setQ] = useState('')
@@ -163,7 +163,7 @@ export default function Home() {
 
               <div className="mt-7 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                 {[
-                  { icon: BadgeDollarSign, title: 'Rp 2.000', label: 'per tiket' },
+                  { icon: BadgeDollarSign, title: formatRupiah(BIAYA_LAYANAN), label: 'per tiket' },
                   { icon: ScanLine, title: 'Check-in QR', label: 'cepat & aman' },
                   { icon: Landmark, title: 'Pencairan', label: 'transparan' },
                 ].map((item) => (
