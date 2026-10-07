@@ -66,7 +66,20 @@ class CheckinService
                 return ['status' => 'unpaid', 'message' => 'Tiket ini belum dibayar — tidak bisa check-in.'];
             }
 
-            if ($pass->event_session_id !== $session->id) {
+            // PENGAMAN (Fase 2): kategori yang tidak punya sesi menghasilkan pass
+            // dengan event_session_id = NULL. Sebelumnya pass seperti itu SELALU
+            // ditolak di gate mana pun (tiket mati). Sekarang pass tanpa sesi boleh
+            // dipakai SEKALI di gate mana pun, asalkan masih di event yang sama.
+            // Tiket normal (event_session_id terisi) tidak terpengaruh sama sekali.
+            $tanpaSesi = $pass->event_session_id === null;
+
+            if ($tanpaSesi) {
+                if ($pass->ticket?->order?->event_id !== $event->id) {
+                    $record(CheckinStatus::FAILED, 'QR bukan untuk event ini', $pass);
+
+                    return ['status' => 'wrong_session', 'message' => 'QR ini bukan untuk event ini.', 'pass' => $pass];
+                }
+            } elseif ($pass->event_session_id !== $session->id) {
                 $record(CheckinStatus::FAILED, 'QR bukan untuk sesi ini', $pass);
 
                 return ['status' => 'wrong_session', 'message' => 'QR ini bukan untuk sesi '.$session->label.'.', 'pass' => $pass];

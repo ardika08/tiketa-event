@@ -66,6 +66,26 @@ class TicketTypeController extends PartnerController
     public function destroy(Request $request, TicketType $ticketType)
     {
         $this->authorizeTicket($request, $ticketType);
+
+        // PENGAMAN: FK tickets.ticket_type_id memakai cascadeOnDelete, sehingga
+        // menghapus kategori tiket akan IKUT MENGHAPUS semua tiket + QR pembeli
+        // yang sudah dibeli untuk kategori ini (dipanggil form event saat partner
+        // menekan tombol hapus pada baris kategori).
+        $jumlahTiket = $ticketType->tickets()->count();
+
+        if ($jumlahTiket > 0) {
+            $jumlahPesanan = $ticketType->tickets()->distinct()->count('order_id');
+
+            return response()->json([
+                'message' => "Kategori \"{$ticketType->nama_tiket}\" tidak bisa dihapus karena sudah ada {$jumlahTiket} tiket terjual "
+                    ."dari {$jumlahPesanan} pesanan. Menghapusnya akan ikut menghapus QR pembeli. "
+                    .'Kalau tiketnya sudah tidak dijual, ubah statusnya menjadi nonaktif.',
+                'kode' => 'kategori_punya_tiket',
+                'jumlah_tiket' => $jumlahTiket,
+                'jumlah_pesanan' => $jumlahPesanan,
+            ], 409);
+        }
+
         $ticketType->delete();
 
         return response()->json(['message' => 'Jenis tiket dihapus.']);

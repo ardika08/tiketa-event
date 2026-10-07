@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Partner;
 use App\Http\Resources\EventResource;
 use App\Models\Event;
 use App\Models\EventSession;
+use App\Models\Ticket;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 
 class EventController extends PartnerController
@@ -60,6 +62,16 @@ class EventController extends PartnerController
         $this->authorizeEvent($request, $event);
 
         $data = $this->validated($request, partial: true);
+
+        if ($request->has('sessions')) {
+            // PENGAMAN: form event menghapus sesi lewat mass-delete di syncSessions().
+            // Dicek SEBELUM $event->update() supaya event tidak setengah tersimpan
+            // ketika penghapusan sesi ditolak.
+            $keepIds = collect($request->input('sessions', []))->pluck('id')->filter()->all();
+            $idsTerhapus = $event->sessions()->whereNotIn('id', $keepIds)->pluck('id')->all();
+            $this->pastikanSesiBolehDihapus($event, $idsTerhapus);
+        }
+
         $event->update($data);
 
         if ($request->has('sessions')) {
@@ -72,6 +84,22 @@ class EventController extends PartnerController
     public function destroy(Request $request, Event $event)
     {
         $this->authorizeEvent($request, $event);
+
+        // PENGAMAN: event memakai SoftDeletes sehingga baris tiket/QR tetap utuh,
+        // TETAPI event yang terhapus hilang dari daftar event sehingga petugas
+        // tidak bisa memilihnya di halaman scan -> tiket pembeli jadi tidak bisa
+        // dipakai. Karena itu event yang sudah ada penjualan tidak boleh dihapus.
+        $jumlahTiket = Ticket::whereHas('order', fn ($q) => $q->where('event_id', $event->id))->count();
+
+        if ($jumlahTiket > 0) {
+            return response()->json([
+                'message' => "Event \"{$event->nama_event}\" tidak bisa dihapus karena sudah ada {$jumlahTiket} tiket terjual. "
+                    .'Kalau acaranya sudah selesai, ubah status event menjadi "Selesai" — tiket pembeli tetap aman dan bisa di-scan.',
+                'kode' => 'event_punya_tiket',
+                'jumlah_tiket' => $jumlahTiket,
+            ], 409);
+        }
+
         $event->delete();
 
         return response()->json(['message' => 'Event dihapus.']);
@@ -99,9 +127,54 @@ class EventController extends PartnerController
     {
         $this->authorizeEvent($request, $event);
         abort_if($session->event_id !== $event->id, 404);
+
+        $this->pastikanSesiBolehDihapus($event, [$session->id]);
+
         $session->delete();
 
         return response()->json(['message' => 'Sesi dihapus.']);
+    }
+
+    /**
+     * PENGAMAN: sesi yang akan dihapus tidak boleh punya tiket terjual, karena FK
+     * ticket_passes.event_session_id memakai cascadeOnDelete sehingga menghapus
+     * sesi akan IKUT MENGHAPUS QR pembeli (tiket pembeli jadi mati).
+     *
+     * Dipakai oleh dua jalur penghapusan: endpoint destroySession DAN mass-delete
+     * di syncSessions() yang dipakai form event (tombol tong sampah pada baris sesi).
+     *
+     * @param  array<int, int>  $idsToDelete
+     */
+    private function pastikanSesiBolehDihapus(Event $event, array $idsToDelete): void
+    {
+        if ($idsToDelete === []) {
+            return;
+        }
+
+        $terkunci = $event->sessions()
+            ->whereIn('id', $idsToDelete)
+            ->withCount('ticketPasses')
+            ->get()
+            ->filter(fn ($s) => $s->ticket_passes_count > 0);
+
+        if ($terkunci->isEmpty()) {
+            return;
+        }
+
+        $rincian = $terkunci
+            ->map(fn ($s) => "\"{$s->label}\" ({$s->ticket_passes_count} tiket)")
+            ->implode(', ');
+
+        throw new HttpResponseException(response()->json([
+            'message' => "Tidak bisa menghapus sesi {$rincian} karena sudah ada tiket terjual. "
+                .'Menghapus sesi akan ikut menghapus QR pembeli. Kalau perlu diubah, cukup ganti nama sesinya.',
+            'kode' => 'sesi_punya_tiket',
+            'sesi' => $terkunci->map(fn ($s) => [
+                'id' => $s->id,
+                'label' => $s->label,
+                'jumlah_tiket' => $s->ticket_passes_count,
+            ])->values()->all(),
+        ], 409));
     }
 
     private function validated(Request $request, bool $partial = false): array
