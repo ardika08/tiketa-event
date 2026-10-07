@@ -79,6 +79,19 @@ export default function EventForm() {
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
 
   const save = async (status) => {
+    // FASE 3: kategori tiket wajib punya minimal 1 sesi. Kategori tanpa sesi
+    // menghasilkan QR yang tidak bisa dipakai check-in di gate mana pun.
+    const tanpaSesi = tiket.filter((t) => t.nama_tiket && ticketSessionIds(t).length === 0)
+    if (tanpaSesi.length > 0) {
+      const daftar = tanpaSesi.map((t) => `• ${t.nama_tiket}`).join('\n')
+      window.alert(
+        eventSessions.length === 0
+          ? `Event ini belum punya sesi/hari.\n\nBuka tab "Sesi", tambahkan minimal 1 sesi, lalu pilih sesi itu di setiap kategori tiket.\n\nKategori yang belum punya sesi:\n${daftar}`
+          : `Setiap kategori tiket wajib punya minimal 1 sesi, supaya QR-nya bisa dipakai check-in.\n\nKategori yang belum punya sesi:\n${daftar}`,
+      )
+      return
+    }
+
     setSaving(true)
     try {
       const sessionsPayload = sessions
@@ -492,6 +505,18 @@ export default function EventForm() {
                         : 'Pilih lebih dari satu sesi untuk menjadikannya tiket bundle.'}
                     </p>
                   </div>
+                )}
+
+                {eventSessions.length === 0 && (
+                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                    Belum ada sesi/hari untuk event ini. Tambahkan minimal 1 sesi di tab &quot;Sesi&quot; dulu, lalu pilih sesi tersebut di sini.
+                  </p>
+                )}
+
+                {eventSessions.length > 0 && t.nama_tiket && ticketSessionIds(t).length === 0 && (
+                  <p className="mt-2 text-xs font-semibold text-rose-600">
+                    Wajib pilih minimal 1 sesi — tanpa sesi, QR tiket ini tidak bisa dipakai check-in.
+                  </p>
                 )}
               </div>
             ))}

@@ -42,6 +42,8 @@ export default function MasterTickets() {
     if (!form.event_id) return setError('Pilih event terlebih dahulu.')
     if (!form.nama_tiket.trim()) return setError('Nama tiket wajib diisi.')
     if (Number(form.kuota) < 1) return setError('Kuota minimal 1.')
+    // FASE 3: tiket tanpa sesi tidak bisa dipakai check-in di gate mana pun.
+    if (form.session_ids.length === 0) return setError('Pilih minimal 1 sesi — tiket tanpa sesi tidak bisa dipakai check-in.')
 
     setSaving(true)
     setError('')
@@ -209,7 +211,18 @@ export default function MasterTickets() {
                   )
                 })}
               </div>
+              {form.session_ids.length === 0 && (
+                <p className="mt-2 text-xs font-semibold text-rose-600">
+                  Wajib pilih minimal 1 sesi — tanpa sesi, tiket ini tidak bisa dipakai check-in.
+                </p>
+              )}
             </div>
+          )}
+
+          {sessions.length === 0 && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+              Event ini belum punya sesi/hari. Tambahkan minimal 1 sesi di menu Event dulu, lalu buat tiketnya di sini.
+            </p>
           )}
 
           {error && <p className="text-sm font-medium text-rose-600">{error}</p>}

@@ -6,6 +6,8 @@ use App\Http\Resources\TicketTypeResource;
 use App\Models\Event;
 use App\Models\TicketType;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class TicketTypeController extends PartnerController
 {
@@ -27,9 +29,15 @@ class TicketTypeController extends PartnerController
         $event = Event::where('organizer_id', $this->organizerId($request))->findOrFail($data['event_id']);
 
         $data['sisa_kuota'] = $data['sisa_kuota'] ?? $data['kuota'];
-        $ticketType = $event->ticketTypes()->create($data);
 
-        $this->syncSessionsTo($ticketType, $request->input('session_ids', []));
+        // Transaksi: kalau sesi ditolak (Fase 3), baris kategori ikut dibatalkan
+        // supaya tidak tertinggal kategori "yatim" yang tanpa sesi.
+        $ticketType = DB::transaction(function () use ($event, $data, $request) {
+            $ticketType = $event->ticketTypes()->create($data);
+            $this->syncSessionsTo($ticketType, $request->input('session_ids', []));
+
+            return $ticketType;
+        });
 
         return (new TicketTypeResource($ticketType->fresh('sessions')))
             ->response()
@@ -54,11 +62,15 @@ class TicketTypeController extends PartnerController
             $data['sisa_kuota'] = max(0, $data['kuota'] - $terjual);
         }
 
-        $ticketType->update($data);
+        // Transaksi: perubahan field dan perubahan sesi harus sukses bersama-sama,
+        // supaya penolakan sesi (Fase 3) tidak menyisakan perubahan setengah jalan.
+        DB::transaction(function () use ($request, $ticketType, $data) {
+            $ticketType->update($data);
 
-        if ($request->has('session_ids')) {
-            $this->syncSessionsTo($ticketType, $request->input('session_ids', []));
-        }
+            if ($request->has('session_ids')) {
+                $this->syncSessionsTo($ticketType, $request->input('session_ids', []));
+            }
+        });
 
         return new TicketTypeResource($ticketType->fresh('sessions'));
     }
@@ -96,8 +108,10 @@ class TicketTypeController extends PartnerController
         $this->authorizeTicket($request, $ticketType);
 
         $data = $request->validate([
-            'session_ids' => ['present', 'array'],
+            'session_ids' => ['present', 'array', 'min:1'],
             'session_ids.*' => ['integer'],
+        ], [
+            'session_ids.min' => 'Kategori tiket harus punya minimal 1 sesi supaya tiketnya bisa dipakai check-in.',
         ]);
 
         $this->syncSessionsTo($ticketType, $data['session_ids']);
@@ -111,6 +125,20 @@ class TicketTypeController extends PartnerController
             ->whereIn('id', $sessionIds)
             ->pluck('id')
             ->all();
+
+        // FASE 3: kategori WAJIB punya minimal 1 sesi. Kategori tanpa sesi
+        // menghasilkan pass dengan event_session_id = NULL, dan pass seperti itu
+        // tidak bisa dipakai check-in di gate mana pun -> tiket pembeli jadi mati.
+        // Dijaga di sini juga supaya berlaku untuk SEMUA jalur (store/update/sync).
+        if ($valid === []) {
+            throw ValidationException::withMessages([
+                'session_ids' => $sessionIds === []
+                    ? "Kategori \"{$ticketType->nama_tiket}\" harus punya minimal 1 sesi. "
+                        .'Pilih minimal satu hari/sesi supaya tiketnya bisa dipakai check-in.'
+                    : "Sesi yang dipilih untuk kategori \"{$ticketType->nama_tiket}\" tidak ditemukan "
+                        ."di event \"{$ticketType->event->nama_event}\". Pilih sesi yang benar.",
+            ]);
+        }
 
         $ticketType->sessions()->sync($valid);
         $ticketType->update(['is_bundle' => count($valid) > 1]);
