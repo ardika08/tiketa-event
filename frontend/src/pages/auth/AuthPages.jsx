@@ -10,29 +10,29 @@ function AuthShell({ title, subtitle, children, footer, bullets }) {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="relative hidden overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-accent-500 p-10 text-white lg:flex lg:flex-col lg:justify-between">
-        <Link to="/" className="flex items-center gap-2">
+        {/* Scrim gelap tipis di bagian bawah: latar biru pekat membuat teks kecil
+            gagal ambang kontras WCAG AA walau opacity dinaikkan sampai 100%. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/30 via-black/20 to-transparent" />
+        <Link to="/" className="relative flex items-center gap-2">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/15 backdrop-blur">
             <Ticket size={20} />
           </span>
-          <span className="flex flex-col leading-none">
-            <span className="text-xl font-extrabold">Nontix</span>
-            <span className="text-xs text-white/70">Ticket Management System</span>
-          </span>
+          <span className="text-xl font-extrabold">Nontix</span>
         </Link>
-        <div>
+        <div className="relative">
           <h2 className="max-w-md text-3xl font-extrabold leading-tight text-white">
             Kelola event, jual tiket, dan pantau penjualan.
           </h2>
           <ul className="mt-6 space-y-3">
             {bullets.map((b) => (
-              <li key={b} className="flex items-center gap-3 text-white/90">
+              <li key={b} className="flex items-center gap-3 text-white">
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-white/20"><Check size={14} /></span>
                 {b}
               </li>
             ))}
           </ul>
         </div>
-        <p className="text-sm text-white/60">Biaya layanan {formatRupiah(BIAYA_LAYANAN)}/tiket · Transparan & terjangkau</p>
+        <p className="relative text-sm text-white/90">Biaya layanan {formatRupiah(BIAYA_LAYANAN)}/tiket · Transparan & terjangkau</p>
       </div>
 
       <div className="flex items-center justify-center bg-slate-50 p-6">
@@ -92,7 +92,7 @@ export function PartnerLogin() {
           <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@penyelenggara.com" />
         </Field>
         <Field label="Kata Sandi">
-          <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="••••••••" />
+          <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Masukkan kata sandi" />
         </Field>
         {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
         <Button type="submit" className="w-full" size="lg" disabled={loading}>{loading ? 'Memproses...' : 'Masuk'} <ArrowRight size={18} /></Button>
@@ -152,7 +152,7 @@ export function PartnerRegister() {
           <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@penyelenggara.com" />
         </Field>
         <Field label="Kata Sandi" hint="Minimal 6 karakter">
-          <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="••••••••" />
+          <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Masukkan kata sandi" />
         </Field>
         {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
         <Button type="submit" className="w-full" size="lg" disabled={loading}>{loading ? 'Memproses...' : 'Daftar & Masuk'} <ArrowRight size={18} /></Button>
