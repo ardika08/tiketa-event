@@ -39,7 +39,7 @@ export default function Home() {
         <div className="container-page relative z-10 flex w-full justify-center py-20 sm:py-24">
           <div className="hero-event__content w-full max-w-4xl text-center">
             <h1 className="text-4xl font-extrabold leading-[1.08] tracking-tight text-white sm:text-[44px] lg:text-[52px]">
-              Temukan Event Seru, Pesan Tiket Tanpa Ribet
+              Temukan Event Seru, Pesan Tiket dalam Hitungan Menit
             </h1>
             <p className="mx-auto mt-4 max-w-2xl text-[15px] leading-relaxed text-white/85 sm:text-base">
               Konser, olahraga, seminar, sampai festival — semua tiket ada di satu tempat.

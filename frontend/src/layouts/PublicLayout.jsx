@@ -20,10 +20,7 @@ export default function PublicLayout() {
             <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-brand-600 to-accent-500 text-white shadow-sm md:h-12 md:w-12">
               <Ticket size={24} />
             </span>
-            <span className="flex flex-col leading-none">
-              <span className="font-display text-[22px] font-extrabold tracking-tight text-slate-900 md:text-2xl">Nontix</span>
-              <span className="mt-1 text-[11px] font-medium text-brand-600 md:text-xs">Ticket Management System</span>
-            </span>
+            <span className="font-display text-[22px] font-extrabold tracking-tight text-slate-900 md:text-2xl">Nontix</span>
           </Link>
 
           <nav className="hidden items-center gap-3 lg:flex">
@@ -99,7 +96,7 @@ export default function PublicLayout() {
               <span className="text-lg font-extrabold text-white">Nontix</span>
             </div>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-300">
-              Platform jual beli tiket event untuk penyelenggara Indonesia. Buat acara, jual tiket, pantau penjualan — tanpa ribet.
+              Platform tiket event untuk penyelenggara di Indonesia. Buat acara, jual tiket, dan pantau penjualan dalam satu sistem.
             </p>
             <div className="mt-6 flex items-center gap-2">
               {[

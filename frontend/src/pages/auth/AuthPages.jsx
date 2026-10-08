@@ -21,7 +21,7 @@ function AuthShell({ title, subtitle, children, footer, bullets }) {
         </Link>
         <div>
           <h2 className="max-w-md text-3xl font-extrabold leading-tight text-white">
-            Kelola event dan jual tiket online tanpa ribet.
+            Kelola event, jual tiket, dan pantau penjualan.
           </h2>
           <ul className="mt-6 space-y-3">
             {bullets.map((b) => (
