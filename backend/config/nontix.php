@@ -98,4 +98,37 @@ return [
         'api_token' => env('MAILKETING_API_TOKEN'),
         'mode' => env('MAILKETING_MODE', 'fake'), // fake | live
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Masa Berlaku Sesi Login
+    |--------------------------------------------------------------------------
+    | Token Sanctum tidak punya masa kedaluwarsa bawaan, jadi middleware
+    | App\Http\Middleware\EnsureSessionIdle yang mencabut token yang sudah
+    | menganggur (idle) terlalu lama. Satuannya MENIT; 0 = tanpa batas.
+    |
+    | Batas per peran sengaja dibedakan:
+    |   - admin_platform : hak akses tertinggi, dipakai jarang -> paling pendek.
+    |   - partner        : kerja panjang (isi event, unggah gambar) -> longgar.
+    |   - staff          : petugas scan QR di lokasi. JANGAN dipendekkan —
+    |                      petugas yang ter-logout di tengah antrean scan
+    |                      membuat acara kacau, sementara perangkatnya memang
+    |                      dipakai terus sepanjang hari acara.
+    |
+    | Selisih ini dihitung dari aktivitas nyata (last_used_at), bukan dari
+    | waktu login, jadi partner yang sedang bekerja tidak akan ter-logout.
+    |
+    | Batas ABSOLUT (token mati sendiri sekian hari setelah dibuat) diatur
+    | terpisah di config/sanctum.php lewat NONTIX_SESSION_ABSOLUTE_DAYS.
+    */
+    'session' => [
+        'idle_minutes' => [
+            'admin_platform' => (int) env('NONTIX_SESSION_IDLE_ADMIN', 30),
+            'partner' => (int) env('NONTIX_SESSION_IDLE_PARTNER', 120),
+            'staff' => (int) env('NONTIX_SESSION_IDLE_STAFF', 480),
+        ],
+
+        // Dipakai untuk peran yang tidak terdaftar di atas.
+        'idle_default_minutes' => (int) env('NONTIX_SESSION_IDLE_DEFAULT', 120),
+    ],
 ];

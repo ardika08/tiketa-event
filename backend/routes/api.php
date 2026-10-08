@@ -60,7 +60,9 @@ Route::get('/payments/{kodeOrder}/fake', [PublicPaymentController::class, 'fake'
 | Terautentikasi
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth:sanctum')->group(function () {
+// 'sesi.idle' mencabut token yang menganggur terlalu lama (lihat
+// App\Http\Middleware\EnsureSessionIdle + config/nontix.php 'session').
+Route::middleware(['auth:sanctum', 'sesi.idle'])->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 

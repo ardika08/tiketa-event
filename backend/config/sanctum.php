@@ -50,7 +50,27 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Batas ABSOLUT: token mati sendiri setelah N hari sejak dibuat, apa pun
+    // aktivitasnya — supaya perangkat yang terlantar tidak hidup selamanya.
+    // Nilainya dalam HARI (default 30), dikonversi ke menit karena Sanctum
+    // memakai satuan menit. 0 = tanpa batas absolut.
+    'expiration' => (int) env('NONTIX_SESSION_ABSOLUTE_DAYS', 30) * 24 * 60,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Pelacakan last_used_at
+    |--------------------------------------------------------------------------
+    |
+    | Dimatikan (false) dengan sengaja. Kalau dibiarkan true (bawaan Sanctum),
+    | Guard akan menulis last_used_at = sekarang pada SETIAP request — dan itu
+    | terjadi SEBELUM middleware jalan — sehingga selisih waktu menganggur
+    | selalu 0 menit dan sesi tidak akan pernah berakhir. Middleware
+    | App\Http\Middleware\EnsureSessionIdle yang mencatat waktunya, setelah
+    | pengecekan. Jangan diubah tanpa menyesuaikan middleware tersebut.
+    |
+    */
+
+    'last_used_at' => false,
 
     /*
     |--------------------------------------------------------------------------
