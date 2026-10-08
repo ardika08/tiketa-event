@@ -5,6 +5,9 @@ let token = typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_KEY
 
 export function setToken(value) {
   token = value || null
+  // Token baru = sesi baru; pemberitahuan "sesi berakhir" boleh muncul lagi
+  // kalau nanti berakhir untuk kedua kalinya.
+  if (value) sudahDiberitahukan = false
   if (typeof localStorage === 'undefined') return
   if (value) localStorage.setItem(TOKEN_KEY, value)
   else localStorage.removeItem(TOKEN_KEY)
@@ -15,12 +18,57 @@ export function getToken() {
 }
 
 export class ApiError extends Error {
-  constructor(message, status, errors) {
+  constructor(message, status, errors, code) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.errors = errors || null
+    this.code = code || null
   }
+}
+
+// ── Fase 2: sesi berakhir di tengah pemakaian ───────────────────────────────
+// Transport inilah yang paling tahu kapan server menolak token (401). Ia TIDAK
+// mengalihkan halaman sendiri: AuthProvider berada di luar BrowserRouter
+// (lihat App.jsx), jadi tidak bisa memakai useNavigate. Yang dikerjakan di sini
+// hanya membuang token + memberi tahu AuthContext; ProtectedRoute yang lalu
+// mengalihkan ke halaman masuk, dan halaman masuk membaca alasannya.
+//
+// Dua penjagaan penting:
+//   1. Hanya request terautentikasi yang dihitung. Login dengan sandi salah
+//      juga membalas 401 — itu bukan sesi berakhir, jangan sampai halaman
+//      masuk berkedip "sesi berakhir" saat pengguna salah ketik sandi.
+//   2. /auth/logout dikecualikan, supaya keluar secara sengaja tidak
+//      memunculkan pemberitahuan.
+const SESI_BERAKHIR_KEY = 'nontix.sesiBerakhir'
+
+let pendengarSesiBerakhir = null
+let sudahDiberitahukan = false
+
+export function setPendengarSesiBerakhir(fn) {
+  pendengarSesiBerakhir = fn
+}
+
+/** Alasan sesi berakhir ('idle' | 'lain'); dibaca SEKALI lalu dihapus. */
+export function ambilAlasanSesiBerakhir() {
+  if (typeof sessionStorage === 'undefined') return null
+  const alasan = sessionStorage.getItem(SESI_BERAKHIR_KEY)
+  if (alasan !== null) sessionStorage.removeItem(SESI_BERAKHIR_KEY)
+  return alasan
+}
+
+function tandaiSesiBerakhir(code) {
+  if (typeof sessionStorage === 'undefined') return
+  sessionStorage.setItem(SESI_BERAKHIR_KEY, code === 'SESSION_IDLE_EXPIRED' ? 'idle' : 'lain')
+}
+
+function tanganiSesiBerakhir(code) {
+  // Banyak request bisa gagal 401 bersamaan; cukup ditangani sekali.
+  if (sudahDiberitahukan) return
+  sudahDiberitahukan = true
+  setToken(null)
+  tandaiSesiBerakhir(code)
+  if (pendengarSesiBerakhir) pendengarSesiBerakhir({ code })
 }
 
 function query(params) {
@@ -58,7 +106,11 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
 
   if (!res.ok) {
     const message = data?.message || (typeof data === 'string' ? data : 'Terjadi kesalahan.')
-    throw new ApiError(message, res.status, data?.errors || null)
+    const code = data?.code || null
+    if (res.status === 401 && auth && token && path !== '/auth/logout') {
+      tanganiSesiBerakhir(code)
+    }
+    throw new ApiError(message, res.status, data?.errors || null, code)
   }
 
   return data
@@ -91,7 +143,11 @@ async function upload(path, file, extra = {}, auth = true) {
 
   if (!res.ok) {
     const message = data?.message || (typeof data === 'string' ? data : 'Gagal mengunggah file.')
-    throw new ApiError(message, res.status, data?.errors || null)
+    const code = data?.code || null
+    if (res.status === 401 && auth && token) {
+      tanganiSesiBerakhir(code)
+    }
+    throw new ApiError(message, res.status, data?.errors || null, code)
   }
 
   return data

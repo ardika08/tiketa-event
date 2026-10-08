@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { authApi, getToken, setToken } from '../lib/api'
+import { authApi, getToken, setPendengarSesiBerakhir, setToken } from '../lib/api'
 
 const AuthContext = createContext(null)
 const STORAGE_KEY = 'nontix.auth'
@@ -28,6 +28,17 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem(STORAGE_KEY)
   }, [user])
 
+  // Fase 2 — sesi berakhir di tengah pemakaian. Transport (lib/api.js) sudah
+  // membuang tokennya; di sini cukup mengosongkan state. ProtectedRoute lalu
+  // mengalihkan ke halaman masuk, dan halaman masuk membaca alasannya dari
+  // sessionStorage untuk menampilkan pemberitahuan. Efek ini sengaja ditulis
+  // SEBELUM efek sinkronisasi di bawah agar pendengarnya sudah terpasang saat
+  // authApi.me() dipanggil.
+  useEffect(() => {
+    setPendengarSesiBerakhir(() => setUser(null))
+    return () => setPendengarSesiBerakhir(null)
+  }, [])
+
   // Sinkronkan sesi dari token saat aplikasi dimuat.
   useEffect(() => {
     let active = true
@@ -35,8 +46,12 @@ export function AuthProvider({ children }) {
       authApi
         .me()
         .then((res) => active && setUser(mapUser(res.user)))
-        .catch(() => {
-          if (active) {
+        .catch((err) => {
+          // 401 sudah ditangani transport (token dibuang + pemberitahuan
+          // "sesi berakhir"). Selain 401 — misalnya koneksi putus — token
+          // JANGAN dibuang: dulu gangguan jaringan sekejap membuat pengguna
+          // ter-logout diam-diam padahal sesinya masih sah.
+          if (active && err?.status === 401) {
             setToken(null)
             setUser(null)
           }

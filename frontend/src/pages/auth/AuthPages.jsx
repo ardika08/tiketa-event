@@ -1,12 +1,32 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { Ticket, ArrowRight, Check } from 'lucide-react'
+import { Ticket, ArrowRight, Check, Info, X } from 'lucide-react'
 import { Button, Field, Input } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
+import { ambilAlasanSesiBerakhir } from '../../lib/api'
 import { formatRupiah } from '../../lib/utils'
 import { BIAYA_LAYANAN } from '../../lib/constants'
 
-function AuthShell({ title, subtitle, children, footer, bullets }) {
+// Fase 2 — pemberitahuan sesi berakhir. Alasannya dititipkan lewat
+// sessionStorage oleh lib/api.js dan dibaca SEKALI di sini (fungsi pembacanya
+// sekaligus menghapus) supaya tidak muncul lagi pada kunjungan berikutnya.
+function usePemberitahuanSesi() {
+  const [pesan, setPesan] = useState(null)
+
+  useEffect(() => {
+    const alasan = ambilAlasanSesiBerakhir()
+    if (alasan === null) return
+    setPesan(
+      alasan === 'idle'
+        ? 'Sesi Anda berakhir karena tidak ada aktivitas. Silakan masuk kembali.'
+        : 'Sesi Anda berakhir. Silakan masuk kembali.',
+    )
+  }, [])
+
+  return [pesan, () => setPesan(null)]
+}
+
+function AuthShell({ title, subtitle, children, footer, bullets, notice, onDismissNotice }) {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="relative hidden overflow-hidden bg-gradient-to-br from-brand-700 via-brand-600 to-accent-500 p-10 text-white lg:flex lg:flex-col lg:justify-between">
@@ -43,6 +63,22 @@ function AuthShell({ title, subtitle, children, footer, bullets }) {
             </span>
             <span className="text-lg font-extrabold text-slate-900">Nontix</span>
           </Link>
+          {notice && (
+            <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+              <Info size={18} className="mt-0.5 shrink-0 text-amber-600" />
+              <p className="flex-1 text-sm text-amber-900">{notice}</p>
+              {onDismissNotice && (
+                <button
+                  type="button"
+                  onClick={onDismissNotice}
+                  aria-label="Tutup pemberitahuan"
+                  className="shrink-0 rounded-lg p-1 text-amber-700 transition hover:bg-amber-100"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          )}
           <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
           <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
           <div className="mt-6">{children}</div>
@@ -59,6 +95,7 @@ export function PartnerLogin() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [notice, dismissNotice] = usePemberitahuanSesi()
 
   if (user?.peran === 'partner') return <Navigate to="/partner/analisis" replace />
 
@@ -84,6 +121,8 @@ export function PartnerLogin() {
     <AuthShell
       title="Masuk ke Dashboard"
       subtitle="Kelola event, tiket, dan penjualanmu."
+      notice={notice}
+      onDismissNotice={dismissNotice}
       bullets={['Buat event tanpa batas', 'Pantau penjualan real-time', 'Pencairan otomatis & transparan']}
       footer={<>Belum punya akun? <Link to="/partner/daftar" className="font-semibold text-brand-700 hover:underline">Daftar sekarang</Link></>}
     >
@@ -167,6 +206,7 @@ export function AdminLogin() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [notice, dismissNotice] = usePemberitahuanSesi()
 
   if (user?.peran === 'admin') return <Navigate to="/admin/dashboard" replace />
 
@@ -188,6 +228,8 @@ export function AdminLogin() {
     <AuthShell
       title="Dashboard Admin Platform"
       subtitle="Pantau seluruh event, mitra, dan pendapatan platform."
+      notice={notice}
+      onDismissNotice={dismissNotice}
       bullets={['Ringkasan semua event', 'Kelola mitra penyelenggara', 'Pantau biaya layanan']}
       footer={<Link to="/" className="font-semibold text-brand-700 hover:underline">Kembali ke situs</Link>}
     >
