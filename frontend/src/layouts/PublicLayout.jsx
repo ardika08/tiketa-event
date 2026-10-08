@@ -22,7 +22,7 @@ export default function PublicLayout() {
             </span>
             <span className="flex flex-col leading-none">
               <span className="font-display text-[22px] font-extrabold tracking-tight text-slate-900 md:text-2xl">Nontix</span>
-              <span className="mt-1 text-[11px] font-medium text-brand-600 md:text-xs">Gak perlu ribet</span>
+              <span className="mt-1 text-[11px] font-medium text-brand-600 md:text-xs">Ticket Management System</span>
             </span>
           </Link>
 

@@ -54,7 +54,7 @@ export default function Invoice() {
               <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand-600 to-accent-500 text-sm font-bold text-white">N</span>
               <span className="text-xl font-extrabold text-slate-900">Nontix</span>
             </div>
-            <p className="mt-2 text-sm text-slate-500">Platform tiket event · Gak perlu ribet</p>
+            <p className="mt-2 text-sm text-slate-500">Platform tiket event · Ticket Management System</p>
           </div>
           <div className="text-right">
             <p className="text-lg font-bold text-slate-900">INVOICE</p>

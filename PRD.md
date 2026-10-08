@@ -10,9 +10,9 @@ Tujuan utama aplikasi:
 - **Menyediakan fondasi sistem** untuk fitur lanjutan: e-ticket dengan kode unik, check-in/redemption di pintu masuk, hingga scan tiket — siap dikembangkan pada fase berikutnya.
 - **Menjadi model bisnis yang skalabel**, dengan biaya layanan **Rp 2.000 per tiket** yang dipotong otomatis dari harga tiket yang dijual partner (skema dapat berubah di masa depan).
 
-Nama produk: **Nontix** · tagline: *"Gak perlu ribet"*.
+Nama produk: **Nontix** · tagline: *"Ticket Management System"*.
 
-Nilai jual utama (value proposition): *"Gak perlu ribet"* — penyelenggara cukup buat event dan bisa langsung jual tiket online dengan dashboard penjualan yang jelas, sehingga mereka **hemat waktu**.
+Nilai jual utama (value proposition): *"Ticket Management System"* — penyelenggara cukup buat event dan bisa langsung jual tiket online dengan dashboard penjualan yang jelas, sehingga mereka **hemat waktu**.
 
 ---
 

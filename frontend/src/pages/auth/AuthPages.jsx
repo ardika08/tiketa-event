@@ -16,7 +16,7 @@ function AuthShell({ title, subtitle, children, footer, bullets }) {
           </span>
           <span className="flex flex-col leading-none">
             <span className="text-xl font-extrabold">Nontix</span>
-            <span className="text-xs text-white/70">Gak perlu ribet</span>
+            <span className="text-xs text-white/70">Ticket Management System</span>
           </span>
         </Link>
         <div>

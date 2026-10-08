@@ -8,7 +8,7 @@
     <div style="max-width:640px;margin:0 auto;padding:24px;">
         <div style="background:#4f46e5;color:#fff;border-radius:16px 16px 0 0;padding:24px;">
             <h1 style="margin:0;font-size:20px;">Nontix</h1>
-            <p style="margin:4px 0 0;font-size:13px;opacity:.9;">Gak perlu ribet</p>
+            <p style="margin:4px 0 0;font-size:13px;opacity:.9;">Ticket Management System</p>
         </div>
 
         <div style="background:#fff;padding:24px;border-radius:0 0 16px 16px;">
