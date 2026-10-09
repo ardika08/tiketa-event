@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Partner;
 use App\Http\Resources\TicketTypeResource;
 use App\Models\Event;
 use App\Models\TicketType;
+use App\Support\StockLedger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -28,7 +29,8 @@ class TicketTypeController extends PartnerController
         $data = $this->validated($request);
         $event = Event::where('organizer_id', $this->organizerId($request))->findOrFail($data['event_id']);
 
-        $data['sisa_kuota'] = $data['sisa_kuota'] ?? $data['kuota'];
+        // sisa_kuota = angka turunan: kategori baru selalu mulai dengan kuota penuh.
+        $data['sisa_kuota'] = $data['kuota'];
 
         // Transaksi: kalau sesi ditolak (Fase 3), baris kategori ikut dibatalkan
         // supaya tidak tertinggal kategori "yatim" yang tanpa sesi.
@@ -38,6 +40,8 @@ class TicketTypeController extends PartnerController
 
             return $ticketType;
         });
+
+        StockLedger::record($ticketType, $ticketType->sisa_kuota, StockLedger::CREATED);
 
         return (new TicketTypeResource($ticketType->fresh('sessions')))
             ->response()
@@ -57,8 +61,14 @@ class TicketTypeController extends PartnerController
 
         $data = $this->validated($request, partial: true);
 
-        if (array_key_exists('kuota', $data) && ! array_key_exists('sisa_kuota', $data)) {
-            $terjual = $ticketType->kuota - $ticketType->sisa_kuota;
+        $kuotaLama = $ticketType->kuota;
+        $sisaLama = $ticketType->sisa_kuota;
+
+        // sisa_kuota tidak bisa dikirim klien (lihat validated()). Kalau kuota
+        // diubah, sisa dihitung ulang supaya tiket yang sudah terjual tetap
+        // terhitung: terjual = kuota_lama - sisa_lama.
+        if (array_key_exists('kuota', $data)) {
+            $terjual = $kuotaLama - $sisaLama;
             $data['sisa_kuota'] = max(0, $data['kuota'] - $terjual);
         }
 
@@ -71,6 +81,17 @@ class TicketTypeController extends PartnerController
                 $this->syncSessionsTo($ticketType, $request->input('session_ids', []));
             }
         });
+
+        $ticketType->refresh();
+
+        if ($ticketType->sisa_kuota !== $sisaLama) {
+            StockLedger::record(
+                $ticketType,
+                $ticketType->sisa_kuota - $sisaLama,
+                StockLedger::QUOTA_EDIT,
+                "kuota {$kuotaLama} -> {$ticketType->kuota}",
+            );
+        }
 
         return new TicketTypeResource($ticketType->fresh('sessions'));
     }
@@ -162,7 +183,10 @@ class TicketTypeController extends PartnerController
             'nama_tiket' => [$required, 'string', 'max:150'],
             'harga' => [$required, 'numeric', 'min:0'],
             'kuota' => [$required, 'integer', 'min:1'],
-            'sisa_kuota' => ['nullable', 'integer', 'min:0'],
+            // 'sisa_kuota' SENGAJA tidak diterima dari request: itu angka
+            // turunan (kuota - tiket terpakai) dan hanya boleh diubah oleh
+            // alur order + nontix:reconcile-stock. Menerimanya dari klien
+            // pernah membuat kuota nyangkut.
             'max_per_order' => ['nullable', 'integer', 'min:1'],
             'jam_masuk_mulai' => ['nullable', 'date_format:H:i'],
             'jam_masuk_selesai' => ['nullable', 'date_format:H:i'],

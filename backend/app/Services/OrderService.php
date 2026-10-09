@@ -12,6 +12,7 @@ use App\Models\TicketPass;
 use App\Models\TicketType;
 use App\Models\Voucher;
 use App\Support\Code;
+use App\Support\StockLedger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -104,6 +105,9 @@ class OrderService
 
                 // Reservasi kuota selama order belum dibatalkan/dibayar.
                 $ticketType->decrement('sisa_kuota', $jumlah);
+                $ticketType->refresh();
+
+                StockLedger::record($ticketType, -$jumlah, StockLedger::RESERVE, $order->kode_order);
             }
 
             if ($voucher) {
@@ -213,6 +217,18 @@ class OrderService
         DB::transaction(function () use ($order, $status) {
             foreach ($order->items as $item) {
                 $item->ticketType()->increment('sisa_kuota', $item->jumlah);
+
+                // Ambil ulang dari DB supaya angka yang dicatat sudah final.
+                $ticketType = $item->ticketType()->first();
+
+                if ($ticketType) {
+                    StockLedger::record(
+                        $ticketType,
+                        $item->jumlah,
+                        StockLedger::RELEASE,
+                        $order->kode_order.' | '.$status->value,
+                    );
+                }
             }
 
             if ($order->voucher_id) {

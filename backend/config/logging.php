@@ -73,6 +73,16 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Jejak mutasi kuota tiket (forensik) — ditulis App\Support\StockLedger.
+        // Rotasi harian, disimpan 90 hari supaya kejadian lama masih bisa dibaca.
+        'stock' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/stock.log'),
+            'level' => 'info',
+            'days' => 90,
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

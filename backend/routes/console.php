@@ -27,3 +27,14 @@ Schedule::command('nontix:sync-payments')
     ->everyTwoMinutes()
     ->withoutOverlapping()
     ->name('nontix-sync-payments');
+
+/*
+|| Jaring pengaman kuota: hitung ulang sisa_kuota dari data order sekali sehari.
+|| Idempoten — angkanya selalu diturunkan dari sumber kebenaran (order), jadi
+|| kebocoran kuota apa pun menyembuhkan diri sendiri dalam 24 jam.
+|| Aman dijalankan berulang: tanpa penyimpangan, command ini tidak mengubah apa pun.
+*/
+Schedule::command('nontix:reconcile-stock --execute')
+    ->dailyAt('03:00')
+    ->withoutOverlapping()
+    ->name('nontix-reconcile-stock');

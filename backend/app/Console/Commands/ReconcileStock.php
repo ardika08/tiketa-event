@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Enums\OrderStatus;
 use App\Models\TicketType;
+use App\Support\StockLedger;
 use Illuminate\Console\Command;
 
 class ReconcileStock extends Command
@@ -53,7 +54,16 @@ class ReconcileStock extends Command
                 $this->warn("  ! {$label}: sisa sekarang={$tt->sisa_kuota}, seharusnya={$seharusnya} (beda ".($beda > 0 ? '+' : '')."{$beda})");
 
                 if ($execute) {
+                    $lama = $tt->sisa_kuota;
                     $tt->update(['sisa_kuota' => $seharusnya]);
+                    $tt->refresh();
+
+                    StockLedger::record(
+                        $tt,
+                        $seharusnya - $lama,
+                        StockLedger::RECONCILE,
+                        "sekarang={$lama}, seharusnya={$seharusnya}",
+                    );
                 }
             }
         }
