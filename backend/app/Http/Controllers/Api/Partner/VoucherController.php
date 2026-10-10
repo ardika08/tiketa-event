@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Partner;
 use App\Models\Event;
 use App\Models\Voucher;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class VoucherController extends PartnerController
 {
@@ -22,19 +24,24 @@ class VoucherController extends PartnerController
     {
         $data = $this->validated($request);
         $data['organizer_id'] = $this->organizerId($request);
-        $data['kode'] = strtoupper($data['kode']);
+        $data['kode'] = strtoupper(trim($data['kode']));
 
         $voucher = Voucher::create($data);
 
-        return response()->json(['data' => $voucher], 201);
+        return response()->json(['data' => $voucher->load('event:id,nama_event')], 201);
     }
 
     public function update(Request $request, Voucher $voucher)
     {
         $this->authorizeVoucher($request, $voucher);
-        $voucher->update($this->validated($request, partial: true));
+        $data = $this->validated($request, partial: true, voucher: $voucher);
+        if (isset($data['kode'])) {
+            $data['kode'] = strtoupper(trim($data['kode']));
+        }
 
-        return response()->json(['data' => $voucher->fresh()]);
+        $voucher->update($data);
+
+        return response()->json(['data' => $voucher->fresh()->load('event:id,nama_event')]);
     }
 
     public function destroy(Request $request, Voucher $voucher)
@@ -50,12 +57,17 @@ class VoucherController extends PartnerController
         abort_if($voucher->organizer_id !== $this->organizerId($request), 403, 'Voucher ini bukan milikmu.');
     }
 
-    private function validated(Request $request, bool $partial = false): array
+    private function validated(Request $request, bool $partial = false, ?Voucher $voucher = null): array
     {
         $required = $partial ? 'sometimes' : 'required';
 
+        $uniqueRule = Rule::unique('vouchers', 'kode');
+        if ($voucher) {
+            $uniqueRule->ignore($voucher->id);
+        }
+
         $data = $request->validate([
-            'kode' => [$required, 'string', 'max:60'],
+            'kode' => [$required, 'string', 'max:60', $uniqueRule],
             'event_id' => ['nullable', 'exists:events,id'],
             'tipe_diskon' => [$required, 'in:nominal,persen'],
             'nilai' => [$required, 'numeric', 'min:0'],
@@ -64,6 +76,12 @@ class VoucherController extends PartnerController
             'berlaku_sampai' => ['nullable', 'date', 'after_or_equal:berlaku_mulai'],
             'status' => ['nullable', 'in:aktif,nonaktif'],
         ]);
+
+        $tipe = $data['tipe_diskon'] ?? ($voucher?->tipe_diskon?->value ?? null);
+        $nilai = isset($data['nilai']) ? (float) $data['nilai'] : (float) ($voucher?->nilai ?? 0);
+        if ($tipe === 'persen' && $nilai > 100) {
+            throw ValidationException::withMessages(['nilai' => 'Diskon persen maksimal 100%.']);
+        }
 
         if (! empty($data['event_id'])) {
             $owned = Event::where('organizer_id', $this->organizerId($request))->whereKey($data['event_id'])->exists();

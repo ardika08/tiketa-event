@@ -46,7 +46,7 @@ class Voucher extends Model
         return $this->belongsTo(Event::class);
     }
 
-    public function isUsable(?int $eventId = null): bool
+    public function isUsable(Event|int|null $event = null): bool
     {
         if ($this->status !== VoucherStatus::ACTIVE) {
             return false;
@@ -54,9 +54,19 @@ class Voucher extends Model
         if ($this->kuota > 0 && $this->terpakai >= $this->kuota) {
             return false;
         }
+
+        $eventId = $event instanceof Event ? $event->id : $event;
+        $eventModel = $event instanceof Event ? $event : ($eventId ? Event::find($eventId) : null);
+
         if ($this->event_id && $eventId && $this->event_id !== $eventId) {
             return false;
         }
+
+        // Voucher tanpa event_id (berlaku luas) tetap dibatasi untuk organizer pemiliknya.
+        if (! $this->event_id && $eventModel && (int) $this->organizer_id !== (int) $eventModel->organizer_id) {
+            return false;
+        }
+
         $today = now()->startOfDay();
         if ($this->berlaku_mulai && $today->lt($this->berlaku_mulai)) {
             return false;

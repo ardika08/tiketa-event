@@ -19,7 +19,7 @@ class VoucherService
             throw ValidationException::withMessages(['kode' => 'Kode voucher tidak ditemukan.']);
         }
 
-        if (! $voucher->isUsable($event->id)) {
+        if (! $voucher->isUsable($event)) {
             throw ValidationException::withMessages(['kode' => 'Kode voucher sudah tidak berlaku.']);
         }
 
