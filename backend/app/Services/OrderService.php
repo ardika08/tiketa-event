@@ -73,7 +73,7 @@ class OrderService
             $voucher = null;
             $diskon = 0.0;
             if ($voucherCode) {
-                $voucher = $this->vouchers->resolve($voucherCode, $event);
+                $voucher = $this->vouchers->resolve($voucherCode, $event, $subtotal);
                 $diskon = $this->vouchers->hitungDiskon($voucher, $subtotal);
             }
 

@@ -71,6 +71,7 @@ class VoucherController extends PartnerController
             'event_id' => ['nullable', 'exists:events,id'],
             'tipe_diskon' => [$required, 'in:nominal,persen'],
             'nilai' => [$required, 'numeric', 'min:0'],
+            'min_pembelian' => ['nullable', 'numeric', 'min:0'],
             'kuota' => ['nullable', 'integer', 'min:0'],
             'berlaku_mulai' => ['nullable', 'date'],
             'berlaku_sampai' => ['nullable', 'date', 'after_or_equal:berlaku_mulai'],

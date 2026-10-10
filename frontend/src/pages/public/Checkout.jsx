@@ -84,6 +84,17 @@ export default function Checkout() {
   }, [])
 
   const subtotal = useMemo(() => items.reduce((s, it) => s + it.harga * it.jumlah, 0), [items])
+
+  useEffect(() => {
+    if (voucher && Number(voucher.min_pembelian) > 0 && subtotal < Number(voucher.min_pembelian)) {
+      setVoucher(null)
+      setVoucherMsg({
+        type: 'error',
+        text: `Voucher ${voucher.kode} dibatalkan karena subtotal belanja kurang dari minimal pembelian.`,
+      })
+    }
+  }, [subtotal, voucher])
+
   const diskon = useMemo(() => {
     if (!voucher) return 0
     const d = voucher.tipe_diskon === 'persen' ? Math.round((subtotal * voucher.nilai) / 100) : voucher.nilai

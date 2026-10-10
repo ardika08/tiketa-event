@@ -65,17 +65,20 @@ class PartnerVoucherTest extends TestCase
             'kode' => 'diskon50k',
             'tipe_diskon' => 'nominal',
             'nilai' => 50000,
+            'min_pembelian' => 500000,
             'kuota' => 100,
             'status' => 'aktif',
         ]);
 
         $res->assertCreated();
         $this->assertSame('DISKON50K', $res->json('data.kode'));
+        $this->assertEquals(500000, $res->json('data.min_pembelian'));
 
         $this->assertDatabaseHas('vouchers', [
             'organizer_id' => $org->id,
             'kode' => 'DISKON50K',
             'nilai' => 50000,
+            'min_pembelian' => 500000,
             'kuota' => 100,
         ]);
     }
@@ -182,5 +185,39 @@ class PartnerVoucherTest extends TestCase
         $eventA = $this->createEvent($orgA);
 
         $this->assertTrue($voucher->isUsable($eventA));
+    }
+
+    public function test_voucher_with_minimum_purchase_validates_subtotal(): void
+    {
+        [$user, $org] = $this->actingPartner();
+        $event = $this->createEvent($org);
+
+        Voucher::create([
+            'organizer_id' => $org->id,
+            'kode' => 'MIN500',
+            'tipe_diskon' => VoucherType::NOMINAL,
+            'nilai' => 50000,
+            'min_pembelian' => 500000,
+            'status' => VoucherStatus::ACTIVE,
+        ]);
+
+        // Coba subtotal Rp 300.000 (di bawah syarat) -> ditolak
+        $resGagal = $this->postJson('/api/vouchers/validate', [
+            'kode' => 'MIN500',
+            'event_id' => $event->id,
+            'subtotal' => 300000,
+        ]);
+        $resGagal->assertStatus(422);
+        $resGagal->assertJsonValidationErrors('kode');
+        $this->assertStringContainsString('500.000', $resGagal->json('errors.kode.0'));
+
+        // Coba subtotal Rp 500.000 (memenuhi syarat) -> berhasil
+        $resSukses = $this->postJson('/api/vouchers/validate', [
+            'kode' => 'MIN500',
+            'event_id' => $event->id,
+            'subtotal' => 500000,
+        ]);
+        $resSukses->assertOk();
+        $this->assertEquals(50000, $resSukses->json('diskon'));
     }
 }

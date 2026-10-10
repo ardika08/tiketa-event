@@ -11,6 +11,7 @@ const EMPTY_FORM = {
   event_id: '',
   tipe_diskon: 'nominal',
   nilai: '',
+  min_pembelian: '',
   kuota: '',
   berlaku_mulai: '',
   berlaku_sampai: '',
@@ -61,6 +62,7 @@ export default function MasterVouchers() {
       event_id: v.event_id ? String(v.event_id) : '',
       tipe_diskon: v.tipe_diskon || 'nominal',
       nilai: v.nilai ?? '',
+      min_pembelian: v.min_pembelian && Number(v.min_pembelian) > 0 ? Number(v.min_pembelian) : '',
       kuota: v.kuota ?? '',
       berlaku_mulai: v.berlaku_mulai ? v.berlaku_mulai.split('T')[0] : '',
       berlaku_sampai: v.berlaku_sampai ? v.berlaku_sampai.split('T')[0] : '',
@@ -101,6 +103,7 @@ export default function MasterVouchers() {
       event_id: form.event_id ? Number(form.event_id) : null,
       tipe_diskon: form.tipe_diskon,
       nilai: nilaiNum,
+      min_pembelian: form.min_pembelian !== '' ? Math.max(0, Number(form.min_pembelian)) : 0,
       kuota: form.kuota !== '' ? Math.max(0, parseInt(form.kuota, 10)) : 0,
       berlaku_mulai: form.berlaku_mulai || null,
       berlaku_sampai: form.berlaku_sampai || null,
@@ -205,6 +208,12 @@ export default function MasterVouchers() {
                       <span className="text-slate-400">Target Event:</span>
                       <span className="font-medium text-slate-700 truncate max-w-[170px]" title={event?.nama_event || 'Semua Event'}>
                         {event ? event.nama_event : 'Semua Event'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Min. Belanja:</span>
+                      <span className="font-medium text-slate-700">
+                        {Number(v.min_pembelian) > 0 ? formatRupiah(v.min_pembelian) : 'Tanpa minimum'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -353,7 +362,17 @@ export default function MasterVouchers() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Kuota Pemakaian" hint="Isi 0 untuk kuota tidak terbatas (unlimited)">
+            <Field label="Minimal Belanja (Rp)" hint="0 = tanpa syarat minimal">
+              <Input
+                type="number"
+                min="0"
+                placeholder="0 (Tanpa Syarat)"
+                value={form.min_pembelian}
+                onChange={(e) => handleFormChange('min_pembelian', e.target.value)}
+              />
+            </Field>
+
+            <Field label="Kuota Pemakaian" hint="0 = tanpa batasan kuota">
               <Input
                 type="number"
                 min="0"
@@ -362,7 +381,9 @@ export default function MasterVouchers() {
                 onChange={(e) => handleFormChange('kuota', e.target.value)}
               />
             </Field>
+          </div>
 
+          <div className="grid grid-cols-3 gap-3">
             <Field label="Status">
               <Select
                 value={form.status}
@@ -372,9 +393,7 @@ export default function MasterVouchers() {
                 <option value="nonaktif">Nonaktif</option>
               </Select>
             </Field>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
             <Field label="Berlaku Mulai" hint="Opsional">
               <Input
                 type="date"

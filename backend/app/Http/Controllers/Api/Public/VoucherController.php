@@ -18,13 +18,14 @@ class VoucherController extends Controller
         ]);
 
         $event = Event::findOrFail($data['event_id']);
-        $voucher = $service->resolve($data['kode'], $event);
         $subtotal = (float) ($data['subtotal'] ?? 0);
+        $voucher = $service->resolve($data['kode'], $event, $subtotal);
 
         return response()->json([
             'kode' => $voucher->kode,
             'tipe_diskon' => $voucher->tipe_diskon->value,
             'nilai' => (float) $voucher->nilai,
+            'min_pembelian' => (float) $voucher->min_pembelian,
             'diskon' => $subtotal > 0 ? $service->hitungDiskon($voucher, $subtotal) : null,
         ]);
     }

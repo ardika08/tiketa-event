@@ -18,6 +18,7 @@ class Voucher extends Model
         'kode',
         'tipe_diskon',
         'nilai',
+        'min_pembelian',
         'kuota',
         'terpakai',
         'berlaku_mulai',
@@ -31,6 +32,7 @@ class Voucher extends Model
             'tipe_diskon' => VoucherType::class,
             'status' => VoucherStatus::class,
             'nilai' => 'decimal:2',
+            'min_pembelian' => 'decimal:2',
             'berlaku_mulai' => 'date',
             'berlaku_sampai' => 'date',
         ];
@@ -76,6 +78,11 @@ class Voucher extends Model
         }
 
         return true;
+    }
+
+    public function minPembelianTerpenuhi(float $subtotal): bool
+    {
+        return (float) $this->min_pembelian <= 0 || $subtotal >= (float) $this->min_pembelian;
     }
 
     public function hitungDiskon(float $subtotal): float
