@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Enums\OrderStatus;
 use App\Models\Event;
+use App\Models\Order;
 use App\Models\Organizer;
+use App\Models\TicketType;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Enums\VoucherType;
@@ -219,5 +222,101 @@ class PartnerVoucherTest extends TestCase
         ]);
         $resSukses->assertOk();
         $this->assertEquals(50000, $resSukses->json('diskon'));
+    }
+
+    public function test_voucher_index_reports_usage_from_paid_orders_only(): void
+    {
+        [$user, $org] = $this->actingPartner();
+        $event = $this->createEvent($org);
+
+        $voucher = Voucher::create([
+            'organizer_id' => $org->id,
+            'event_id' => $event->id,
+            'kode' => 'PAKAI10',
+            'tipe_diskon' => VoucherType::NOMINAL,
+            'nilai' => 10000,
+            'kuota' => 10,
+            'status' => VoucherStatus::ACTIVE,
+        ]);
+
+        $tiket = $this->createTicketType($event, ['nama_tiket' => 'Reguler', 'harga' => 100000]);
+
+        // Budi beli 2 tiket, lalu beli lagi 1 tiket -> 1 pembeli, 2 pesanan, 3 tiket.
+        $this->buatOrder($event, $tiket, $voucher, OrderStatus::PAID, 'budi@nontix.id', 2);
+        $this->buatOrder($event, $tiket, $voucher, OrderStatus::PAID, 'BUDI@nontix.id', 1);
+
+        // Siti 1 pesanan 1 tiket -> pembeli kedua.
+        $this->buatOrder($event, $tiket, $voucher, OrderStatus::PAID, 'siti@nontix.id', 1);
+
+        // Pending dan dibatalkan tidak boleh dihitung sebagai pembeli lunas.
+        $this->buatOrder($event, $tiket, $voucher, OrderStatus::PENDING, 'tono@nontix.id', 1);
+        $this->buatOrder($event, $tiket, $voucher, OrderStatus::CANCELLED, 'ani@nontix.id', 3);
+
+        $res = $this->getJson('/api/partner/vouchers');
+        $res->assertOk();
+
+        $pemakaian = $res->json('data.0.pemakaian');
+
+        $this->assertSame(2, $pemakaian['pembeli']);
+        $this->assertSame(3, $pemakaian['pesanan_lunas']);
+        $this->assertSame(4, $pemakaian['tiket']);
+        $this->assertSame(30000.0, (float) $pemakaian['total_diskon']);
+        $this->assertSame(1, $pemakaian['menunggu_bayar']);
+    }
+
+    public function test_voucher_index_reports_zero_usage_when_never_used(): void
+    {
+        [$user, $org] = $this->actingPartner();
+
+        Voucher::create([
+            'organizer_id' => $org->id,
+            'kode' => 'BELUMPAKAI',
+            'tipe_diskon' => VoucherType::NOMINAL,
+            'nilai' => 5000,
+        ]);
+
+        $res = $this->getJson('/api/partner/vouchers');
+        $res->assertOk();
+
+        $pemakaian = $res->json('data.0.pemakaian');
+
+        $this->assertSame(0, $pemakaian['pembeli']);
+        $this->assertSame(0, $pemakaian['pesanan_lunas']);
+        $this->assertSame(0, $pemakaian['tiket']);
+        $this->assertEquals(0, $pemakaian['total_diskon']);
+        $this->assertSame(0, $pemakaian['menunggu_bayar']);
+    }
+
+    private function buatOrder(
+        Event $event,
+        TicketType $tiket,
+        Voucher $voucher,
+        OrderStatus $status,
+        string $email,
+        int $jumlah,
+    ): void {
+        $subtotal = $jumlah * 100000;
+
+        $order = Order::create([
+            'event_id' => $event->id,
+            'nama_pembeli' => 'Pembeli '.$email,
+            'email' => $email,
+            'whatsapp' => '08120000000',
+            'voucher_id' => $voucher->id,
+            'subtotal' => $subtotal,
+            'diskon' => 10000,
+            'total_harga' => $subtotal - 10000,
+            'biaya_layanan' => 2000 * $jumlah,
+            'status' => $status,
+            'batas_bayar' => now()->addMinutes(30),
+            'paid_at' => $status === OrderStatus::PAID ? now() : null,
+        ]);
+
+        $order->items()->create([
+            'ticket_type_id' => $tiket->id,
+            'jumlah' => $jumlah,
+            'harga_satuan' => 100000,
+            'subtotal' => $subtotal,
+        ]);
     }
 }

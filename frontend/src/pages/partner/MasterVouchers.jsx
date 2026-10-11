@@ -184,6 +184,8 @@ export default function MasterVouchers() {
             const isUnlimited = Number(v.kuota) === 0
             const isHabis = !isUnlimited && v.terpakai >= v.kuota
             const isCopied = copiedId === v.id
+            const pemakaian = v.pemakaian || { pembeli: 0, pesanan_lunas: 0, tiket: 0, total_diskon: 0, menunggu_bayar: 0 }
+            const adaPemakaian = Number(pemakaian.pesanan_lunas) > 0 || Number(pemakaian.menunggu_bayar) > 0
 
             return (
               <Card key={v.id} className="flex flex-col justify-between p-5">
@@ -227,7 +229,7 @@ export default function MasterVouchers() {
                   <div className="mt-4">
                     <div className="mb-1.5 flex justify-between text-xs text-slate-500">
                       <span>
-                        Terpakai <strong className="text-slate-700">{v.terpakai}</strong>
+                        Kuota terpakai <strong className="text-slate-700">{v.terpakai}</strong>
                         {isUnlimited ? ' (Tanpa batas kuota)' : ` / ${v.kuota}`}
                       </span>
                       <Badge color={isHabis ? 'red' : isUnlimited ? 'blue' : 'green'}>
@@ -240,6 +242,41 @@ export default function MasterVouchers() {
                         max={v.kuota}
                         color={isHabis ? 'bg-rose-500' : 'bg-emerald-500'}
                       />
+                    )}
+                    <p className="mt-1.5 text-[11px] text-slate-400">
+                      Termasuk pesanan yang belum dibayar.
+                    </p>
+                  </div>
+
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Pemakaian
+                    </p>
+                    {!adaPemakaian ? (
+                      <p className="text-xs text-slate-400">Belum ada pemakaian.</p>
+                    ) : (
+                      <div className="space-y-1.5 text-xs text-slate-500">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Pembeli lunas</span>
+                          <span className="font-medium text-slate-700">
+                            {pemakaian.pembeli} orang · {pemakaian.pesanan_lunas} pesanan
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Tiket terjual</span>
+                          <span className="font-medium text-slate-700">{pemakaian.tiket} tiket</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400">Total diskon</span>
+                          <span className="font-medium text-slate-700">{formatRupiah(pemakaian.total_diskon)}</span>
+                        </div>
+                        {Number(pemakaian.menunggu_bayar) > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400">Menunggu bayar</span>
+                            <span className="font-medium text-amber-600">{pemakaian.menunggu_bayar} pesanan</span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
