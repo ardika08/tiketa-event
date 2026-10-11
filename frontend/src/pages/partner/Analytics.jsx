@@ -52,7 +52,7 @@ export default function Analytics() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Tiket Terjual" value={(summary.tiket_terjual || 0).toLocaleString('id-ID')} icon={Ticket} color="brand" hint="Total sepanjang waktu" />
         <Stat label="Pendapatan Kotor" value={formatRupiah(summary.pendapatan_kotor || 0)} icon={Wallet} color="green" hint="Total sepanjang waktu" />
-        <Stat label="Pesanan Lunas" value={(summary.jumlah_order || 0).toLocaleString('id-ID')} icon={ShoppingCart} color="blue" hint="Total sepanjang waktu" />
+        <Stat label="Pesanan Lunas" value={(summary.jumlah_order || 0).toLocaleString('id-ID')} icon={ShoppingCart} color="blue" hint="Jumlah pesanan — 1 pesanan bisa berisi beberapa tiket" />
         <Stat label="Biaya Layanan" value={formatRupiah(summary.biaya_layanan || 0)} icon={TrendingUp} color="amber" hint={`${formatRupiah(BIAYA_LAYANAN)}/tiket`} />
       </div>
 
