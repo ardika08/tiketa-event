@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { Ticket, Wallet, ShoppingCart, TrendingUp, CalendarDays } from 'lucide-react'
-import { Card, PageHeader, Stat, StatusBadge, ProgressBar } from '../../components/ui'
+import { Ticket, Wallet, ShoppingCart, TrendingUp, CalendarDays, RefreshCw } from 'lucide-react'
+import { Button, Card, PageHeader, Stat, StatusBadge, ProgressBar } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
@@ -24,7 +24,7 @@ export default function Analytics() {
   const [range, setRange] = useState('7d')
   const days = range === '30d' ? 30 : 7
 
-  const { data, loading } = useApi(() => partnerApi.analytics({ days }), [range])
+  const { data, loading, reload } = useApi(() => partnerApi.analytics({ days }), [range])
   const { data: buyersData } = useApi(() => partnerApi.buyers(), [])
 
   const summary = data?.summary || {}
@@ -42,28 +42,40 @@ export default function Analytics() {
         title="Analisis"
         description="Ringkasan performa penjualan tiket eventmu."
         action={
-          <select value={range} onChange={(e) => setRange(e.target.value)} className="input w-auto">
-            <option value="7d">7 hari terakhir</option>
-            <option value="30d">30 hari terakhir</option>
-          </select>
+          <Button variant="secondary" size="sm" onClick={reload} disabled={loading}>
+            <RefreshCw size={16} className={loading ? 'animate-spin' : undefined} />
+            Muat ulang
+          </Button>
         }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Tiket Terjual" value={(summary.tiket_terjual || 0).toLocaleString('id-ID')} icon={Ticket} color="brand" />
-        <Stat label="Pendapatan Kotor" value={formatRupiah(summary.pendapatan_kotor || 0)} icon={Wallet} color="green" />
-        <Stat label="Pesanan Lunas" value={(summary.jumlah_order || 0).toLocaleString('id-ID')} icon={ShoppingCart} color="blue" />
+        <Stat label="Tiket Terjual" value={(summary.tiket_terjual || 0).toLocaleString('id-ID')} icon={Ticket} color="brand" hint="Total sepanjang waktu" />
+        <Stat label="Pendapatan Kotor" value={formatRupiah(summary.pendapatan_kotor || 0)} icon={Wallet} color="green" hint="Total sepanjang waktu" />
+        <Stat label="Pesanan Lunas" value={(summary.jumlah_order || 0).toLocaleString('id-ID')} icon={ShoppingCart} color="blue" hint="Total sepanjang waktu" />
         <Stat label="Biaya Layanan" value={formatRupiah(summary.biaya_layanan || 0)} icon={TrendingUp} color="amber" hint={`${formatRupiah(BIAYA_LAYANAN)}/tiket`} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card className="min-w-0 p-5 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="font-bold text-slate-900">Tren Penjualan</h2>
               <p className="text-sm text-slate-500">Pendapatan harian pada periode terpilih</p>
             </div>
-            <CalendarDays size={18} className="text-slate-400" />
+            <div className="flex items-center gap-2">
+              <CalendarDays size={18} className="shrink-0 text-slate-400" />
+              <label htmlFor="periode-grafik" className="shrink-0 text-xs font-medium text-slate-500">Periode grafik</label>
+              <select
+                id="periode-grafik"
+                value={range}
+                onChange={(e) => setRange(e.target.value)}
+                className="input w-auto"
+              >
+                <option value="7d">7 hari terakhir</option>
+                <option value="30d">30 hari terakhir</option>
+              </select>
+            </div>
           </div>
           <div className="h-72">
             {loading ? (
