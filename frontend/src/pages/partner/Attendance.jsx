@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Search, Download, Users, CheckCircle2, Clock, CalendarDays } from 'lucide-react'
+import { Search, Download, Users, CheckCircle2, Clock, CalendarDays, LayoutGrid } from 'lucide-react'
 import { Button, Card, Input, PageHeader, Stat, StatusBadge, EmptyState, Badge, ProgressBar, Select } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
@@ -42,6 +42,33 @@ export default function Attendance() {
   const totalTiket = scope.reduce((s, x) => s + (x.total_pass || 0), 0)
   const persen = totalTiket ? Math.round((hadir / totalTiket) * 100) : 0
 
+  // Rekap per kategori, di-scope mengikuti filter sesi yang sedang aktif supaya
+  // angkanya tidak pernah bertabrakan dengan kartu statistik di atas.
+  const kategori = useMemo(() => {
+    const semua = data?.kategori || []
+    return semua.map((k) => {
+      if (sessionFilter === 'all') return k
+      const s = k.per_sesi?.[String(sessionFilter)] || {}
+      const totalPass = s.total_pass || 0
+      const totalHadir = s.total_hadir || 0
+      return {
+        ...k,
+        total_pass: totalPass,
+        total_hadir: totalHadir,
+        persentase: totalPass ? Math.round((totalHadir / totalPass) * 100) : 0,
+      }
+    })
+  }, [data, sessionFilter])
+
+  const sesiAktif = sessions.find((s) => s.id === sessionFilter)
+  const cakupanKategori =
+    sessionFilter === 'all'
+      ? 'Semua sesi'
+      : `${sesiAktif?.label ?? 'Sesi'} — ${sesiAktif?.nama_session ?? ''}`.trim()
+
+  const totalKategoriPass = kategori.reduce((s, k) => s + (k.total_pass || 0), 0)
+  const totalKategoriHadir = kategori.reduce((s, k) => s + (k.total_hadir || 0), 0)
+
   // Ekspor CSV asli dari baris yang sedang tampil (ikut filter sesi & pencarian).
   const unduhLaporan = () => {
     const namaEvent = events.find((e) => e.id === eventId)?.nama_event || 'event'
@@ -53,6 +80,23 @@ export default function Attendance() {
       [`Riwayat Kehadiran — ${namaEvent}`],
       [`Filter sesi: ${labelSesi}`],
       [`Jumlah baris: ${filtered.length}`],
+      [],
+      [`Ringkasan per Kategori — ${cakupanKategori}`],
+      ['Kategori', 'Total Tiket', 'Sudah Hadir', 'Belum Hadir', 'Kehadiran (%)'],
+      ...kategori.map((k) => [
+        k.nama_tiket,
+        k.total_pass || 0,
+        k.total_hadir || 0,
+        Math.max(0, (k.total_pass || 0) - (k.total_hadir || 0)),
+        k.persentase || 0,
+      ]),
+      [
+        'TOTAL',
+        totalKategoriPass,
+        totalKategoriHadir,
+        Math.max(0, totalKategoriPass - totalKategoriHadir),
+        totalKategoriPass ? Math.round((totalKategoriHadir / totalKategoriPass) * 100) : 0,
+      ],
       [],
       ['Nama Pemegang', 'Kode QR', 'Sesi', 'Gate', 'Waktu Check-in', 'Status', 'Catatan'],
       ...filtered.map((c) => [
@@ -72,7 +116,7 @@ export default function Attendance() {
     <div>
       <PageHeader
         title="Riwayat Kehadiran"
-        description="Pantau kehadiran per sesi/hari acara."
+        description="Pantau kehadiran per sesi dan per kategori tiket."
         action={
           <Button variant="secondary" onClick={unduhLaporan} disabled={!filtered.length}>
             <Download size={16} /> Unduh Laporan
@@ -146,6 +190,84 @@ export default function Attendance() {
           })}
           {sessions.length === 0 && <p className="text-sm text-slate-400">Belum ada data sesi.</p>}
         </div>
+      </Card>
+
+      <Card className="mt-6 p-5">
+        <div className="mb-1 flex items-center gap-2">
+          <LayoutGrid size={18} className="text-brand-600" />
+          <h2 className="font-bold text-slate-900">Laporan per Kategori</h2>
+        </div>
+        <p className="mb-4 text-xs text-slate-500">
+          Cakupan: <span className="font-semibold text-slate-600">{cakupanKategori}</span> — mengikuti filter sesi di
+          atas. 1 tiket = 1 baris, dihitung dari tiket yang sudah lunas.
+        </p>
+        {loading ? (
+          <div className="h-40 animate-pulse rounded-xl bg-slate-100" />
+        ) : kategori.length === 0 ? (
+          <EmptyState
+            icon={LayoutGrid}
+            title="Belum ada kategori tiket"
+            description="Kategori akan muncul setelah kamu membuat jenis tiket di event ini."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
+                  <th className="px-5 py-3 font-semibold">Kategori</th>
+                  <th className="px-5 py-3 text-right font-semibold">Total Tiket</th>
+                  <th className="px-5 py-3 text-right font-semibold">Sudah Hadir</th>
+                  <th className="px-5 py-3 text-right font-semibold">Belum Hadir</th>
+                  <th className="px-5 py-3 font-semibold">Kehadiran</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {kategori.map((k) => {
+                  const belum = Math.max(0, (k.total_pass || 0) - (k.total_hadir || 0))
+                  return (
+                    <tr key={k.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-3 font-medium text-slate-800">{k.nama_tiket}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-slate-600">
+                        {(k.total_pass || 0).toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-5 py-3 text-right tabular-nums font-semibold text-emerald-600">
+                        {(k.total_hadir || 0).toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-5 py-3 text-right tabular-nums text-slate-500">
+                        {belum.toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 shrink-0">
+                            <ProgressBar value={k.total_hadir || 0} max={k.total_pass || 1} />
+                          </div>
+                          <span className="w-9 text-right text-xs font-semibold text-slate-600">
+                            {k.persentase || 0}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-slate-200 bg-slate-50 font-semibold text-slate-800">
+                  <td className="px-5 py-3">Total</td>
+                  <td className="px-5 py-3 text-right tabular-nums">{totalKategoriPass.toLocaleString('id-ID')}</td>
+                  <td className="px-5 py-3 text-right tabular-nums text-emerald-700">
+                    {totalKategoriHadir.toLocaleString('id-ID')}
+                  </td>
+                  <td className="px-5 py-3 text-right tabular-nums">
+                    {Math.max(0, totalKategoriPass - totalKategoriHadir).toLocaleString('id-ID')}
+                  </td>
+                  <td className="px-5 py-3 text-xs">
+                    {totalKategoriPass ? Math.round((totalKategoriHadir / totalKategoriPass) * 100) : 0}%
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </Card>
 
       <Card className="mt-6">
