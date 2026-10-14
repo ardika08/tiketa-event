@@ -3,6 +3,7 @@ import { Html5Qrcode } from 'html5-qrcode'
 import {
   X, Camera, RefreshCw, CheckCircle2, AlertTriangle, XCircle,
   Loader2, SwitchCamera, VideoOff, ScanLine,
+  Clock,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
@@ -72,6 +73,8 @@ const FLASH_STYLE = {
   valid: { wrap: 'bg-emerald-500/95', icon: CheckCircle2, title: 'BERHASIL' },
   used: { wrap: 'bg-amber-500/95', icon: AlertTriangle, title: 'SUDAH DIPAKAI' },
   wrong_session: { wrap: 'bg-amber-500/95', icon: AlertTriangle, title: 'SESI TIDAK COCOK' },
+  not_open: { wrap: 'bg-sky-500/95', icon: Clock, title: 'BELUM DIBUKA' },
+  closed: { wrap: 'bg-amber-500/95', icon: AlertTriangle, title: 'SUDAH DITUTUP' },
   unpaid: { wrap: 'bg-amber-500/95', icon: AlertTriangle, title: 'BELUM LUNAS' },
   invalid: { wrap: 'bg-rose-500/95', icon: XCircle, title: 'GAGAL' },
   pending: { wrap: 'bg-slate-800/90', icon: Loader2, title: 'MEMERIKSA…' },
@@ -125,15 +128,17 @@ export default function QrScannerModal({
 
     const status = res?.status || 'invalid'
     const ok = status === 'valid'
+    // Penolakan karena jadwal jam masuk pesannya lebih panjang → tahan lebih lama.
+    const perluDibaca = status === 'not_open' || status === 'closed'
     beep(ok)
     vibrate(ok)
-    setFlash({ status, kode, message: res?.message, ticket: res?.ticket })
+    setFlash({ status, kode, message: res?.message, ticket: res?.ticket, pesan_pengunjung: res?.pesan_pengunjung })
 
     // Petugas butuh waktu membaca detail pemegang tiket → tahan 3 detik.
     window.setTimeout(() => {
       setFlash(null)
       busyRef.current = false
-    }, ok ? 3000 : 2400)
+    }, ok ? 3000 : perluDibaca ? 3600 : 2400)
   }, [])
 
   /* --- Tidak ada QR di frame → siap memindai kode berikutnya --- */
@@ -340,7 +345,19 @@ export default function QrScannerModal({
                   <p className="font-mono font-bold">{flash.ticket.kode_tiket}</p>
                   <p className="mt-0.5">{flash.ticket.nama_pemegang}</p>
                   {flash.ticket.nama_tiket && <p className="text-xs text-white/80">{flash.ticket.nama_tiket}</p>}
+                  {(flash.ticket.sesi_label || flash.ticket.label_jam) && (
+                    <p className="mt-0.5 text-xs text-white/70">
+                      {flash.ticket.sesi_label ? `Sesi ${flash.ticket.sesi_label}` : ''}
+                      {flash.ticket.sesi_label && flash.ticket.label_jam ? ' · ' : ''}
+                      {flash.ticket.label_jam ? `Jam masuk ${flash.ticket.label_jam} WIB` : ''}
+                    </p>
+                  )}
                 </div>
+              )}
+              {flash.pesan_pengunjung && (
+                <p className="mt-3 w-full max-w-xs rounded-xl bg-black/20 px-3 py-2 text-xs text-white/90">
+                  Untuk pengunjung: “{flash.pesan_pengunjung}”
+                </p>
               )}
             </div>
           )}

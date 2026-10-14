@@ -189,7 +189,16 @@ class TicketTypeController extends PartnerController
             // pernah membuat kuota nyangkut.
             'max_per_order' => ['nullable', 'integer', 'min:1'],
             'jam_masuk_mulai' => ['nullable', 'date_format:H:i'],
-            'jam_masuk_selesai' => ['nullable', 'date_format:H:i'],
+            // Jam selesai tidak boleh sama dengan jam mulai (jendela 0 detik).
+            // Jam selesai yang LEBIH KECIL dari jam mulai tetap sah — itu jendela
+            // yang melewati tengah malam, mis. 22:00–02:00.
+            'jam_masuk_selesai' => array_filter([
+                'nullable',
+                'date_format:H:i',
+                $request->filled('jam_masuk_mulai') && $request->filled('jam_masuk_selesai')
+                    ? 'different:jam_masuk_mulai'
+                    : null,
+            ]),
             'gambar_url' => ['nullable', 'string', 'max:500'],
             'status' => ['nullable', 'in:aktif,nonaktif'],
         ]);

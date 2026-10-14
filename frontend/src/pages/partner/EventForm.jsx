@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Save, Send, Plus, Trash2, GripVertical, Info,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button, Card, Field, Input, Select, Textarea, Badge, PageHeader } from '../../components/ui'
 import { ImagePicker } from '../../components/ImagePicker'
@@ -11,6 +12,33 @@ import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { normalizeEvent } from '../../lib/normalize'
 import { cn } from '../../lib/utils'
+
+/**
+ * Cari celah jam antar kategori tiket — mis. Baby Shower tutup 10:00 tapi
+ * Reguler baru buka 10:30: selama 30 menit itu semua QR ditolak di gerbang.
+ * Kategori tanpa jam masuk (bebas masuk kapan saja) tidak ikut dihitung.
+ */
+function cariCelahJam(daftar) {
+  const berjadwal = daftar
+    .filter((t) => t.jam_masuk_mulai && t.jam_masuk_selesai && t.jam_masuk_mulai < t.jam_masuk_selesai)
+    .map((t) => ({ nama: t.nama_tiket || 'Tanpa nama', mulai: t.jam_masuk_mulai, selesai: t.jam_masuk_selesai }))
+    .sort((a, b) => a.mulai.localeCompare(b.mulai))
+
+  const celah = []
+  const bentrok = []
+
+  for (let i = 0; i < berjadwal.length - 1; i += 1) {
+    const ini = berjadwal[i]
+    const lanjut = berjadwal[i + 1]
+    if (ini.selesai < lanjut.mulai) {
+      celah.push({ dari: ini.selesai, ke: lanjut.mulai, sebelum: ini.nama, sesudah: lanjut.nama })
+    } else if (ini.selesai > lanjut.mulai) {
+      bentrok.push({ nama: ini.nama, dengan: lanjut.nama })
+    }
+  }
+
+  return { celah, bentrok, jumlahBerjadwal: berjadwal.length }
+}
 
 const TABS = [
   { id: 'info', label: 'Informasi Event' },
@@ -419,6 +447,31 @@ export default function EventForm() {
               <Plus size={15} /> Tambah
             </Button>
           </div>
+          {(() => {
+            const { celah, bentrok, jumlahBerjadwal } = cariCelahJam(tiket)
+            if (!jumlahBerjadwal) return null
+            return (
+              <div className="mb-4 space-y-2">
+                {celah.map((c, i) => (
+                  <div key={`celah-${i}`} className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                    <p>
+                      Ada celah jadwal <strong>{c.dari}–{c.ke}</strong> antara <strong>{c.sebelum}</strong> dan{' '}
+                      <strong>{c.sesudah}</strong>. Selama celah itu semua QR ditolak di gerbang — rapatkan jamnya kalau tidak disengaja.
+                    </p>
+                  </div>
+                ))}
+                {bentrok.map((b, i) => (
+                  <div key={`bentrok-${i}`} className="flex items-start gap-2 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
+                    <Info size={16} className="mt-0.5 shrink-0" />
+                    <p>
+                      Jam masuk <strong>{b.nama}</strong> dan <strong>{b.dengan}</strong> tumpang tindih — kedua kategori boleh masuk bersamaan.
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
           <div className="space-y-4">
             {tiket.length === 0 && (
               <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
@@ -461,7 +514,9 @@ export default function EventForm() {
                     <Input type="time" value={t.jam_masuk_selesai || ''} onChange={(e) => updateTiket(t._key, 'jam_masuk_selesai', e.target.value)} />
                   </div>
                 </div>
-                <p className="mt-1 text-xs text-slate-400">Opsional — kosongkan jika jam masuk mengikuti jam event/sesi.</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Opsional — di gerbang, jam ini jadi jam masuk (gelombang) khusus kategori ini. Kosongkan jika kategori ini boleh masuk kapan saja.
+                </p>
 
                 <div className="mt-3">
                   <label className="label text-xs">Gambar Tiket (opsional)</label>
