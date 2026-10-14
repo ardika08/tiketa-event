@@ -70,7 +70,7 @@ class ScanController extends PartnerController
             ->orderBy('jam_masuk_mulai')
             ->orderBy('nama_tiket')
             ->get(['id', 'nama_tiket', 'jam_masuk_mulai', 'jam_masuk_selesai'])
-            ->map(function (TicketType $t) use ($sekarang, $hitung) {
+            ->map(function (TicketType $t) use ($sekarang, $hitung, $sesiAktif) {
                 $angka = $hitung->get($t->id);
 
                 return [
@@ -79,8 +79,21 @@ class ScanController extends PartnerController
                     'jam_masuk_mulai' => JadwalMasuk::jam($t->jam_masuk_mulai) ?: null,
                     'jam_masuk_selesai' => JadwalMasuk::jam($t->jam_masuk_selesai) ?: null,
                     'label_jam' => JadwalMasuk::labelJam($t->jam_masuk_mulai, $t->jam_masuk_selesai),
-                    'status' => JadwalMasuk::statusKategori($t->jam_masuk_mulai, $t->jam_masuk_selesai, $sekarang),
-                    'menit_ke_buka' => JadwalMasuk::menitKeJam($t->jam_masuk_mulai, $sekarang),
+                    // Konteks hari sesi dikirim ikut: di luar hari-H semua
+                    // kategori harus terbaca "belum dibuka", bukan "sudah
+                    // ditutup" hanya karena jamnya sudah lewat hari ini.
+                    'status' => JadwalMasuk::statusKategori(
+                        $t->jam_masuk_mulai,
+                        $t->jam_masuk_selesai,
+                        $sekarang,
+                        $sesiAktif?->tanggal_mulai,
+                        $sesiAktif?->tanggal_selesai,
+                    ),
+                    'menit_ke_buka' => JadwalMasuk::menitKeBukaKategori(
+                        $t->jam_masuk_mulai,
+                        $sekarang,
+                        $sesiAktif?->tanggal_mulai,
+                    ),
                     'total_pass' => (int) ($angka->total_pass ?? 0),
                     'total_hadir' => (int) ($angka->total_hadir ?? 0),
                 ];

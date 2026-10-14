@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Carbon\CarbonInterface;
+use Carbon\Carbon;
 
 /**
  * Satu-satunya tempat aturan "boleh masuk sekarang atau tidak" dihitung.
@@ -82,15 +83,43 @@ class JadwalMasuk
     /**
      * Status untuk panel gelombang di halaman scan.
      *
+     * $sesiMulai / $sesiSelesai = jendela hari sesi yang sedang ditampilkan.
+     *
+     * Konteks hari WAJIB ikut dihitung. Tanpa itu panel salah: pukul 14:00 di
+     * hari biasa, semua kategori berjam pagi akan terbaca "sudah ditutup"
+     * padahal gerbangnya belum pernah dibuka hari itu. Urutannya:
+     *   1. sebelum sesi dibuka  → semua kategori "belum_dibuka"
+     *   2. setelah sesi ditutup → semua kategori "sudah_ditutup"
+     *   3. di dalam sesi        → bandingkan jam kategori seperti biasa
+     *
      * @return 'dibuka'|'belum_dibuka'|'sudah_ditutup'|'tanpa_jadwal'
      */
-    public static function statusKategori(?string $mulai, ?string $selesai, CarbonInterface $sekarang): string
-    {
+    public static function statusKategori(
+        ?string $mulai,
+        ?string $selesai,
+        CarbonInterface $sekarang,
+        mixed $sesiMulai = null,
+        mixed $sesiSelesai = null,
+    ): string {
+        if (self::statusJam($mulai, $selesai, $sekarang) === null) {
+            return 'tanpa_jadwal';
+        }
+
+        $sesiMulai = self::waktu($sesiMulai);
+        $sesiSelesai = self::waktu($sesiSelesai);
+
+        if ($sesiMulai && $sekarang->lt($sesiMulai)) {
+            return 'belum_dibuka';
+        }
+
+        if ($sesiSelesai && $sekarang->gt($sesiSelesai)) {
+            return 'sudah_ditutup';
+        }
+
         return match (self::statusJam($mulai, $selesai, $sekarang)) {
             'belum' => 'belum_dibuka',
             'lewat' => 'sudah_ditutup',
-            'dalam' => 'dibuka',
-            default => 'tanpa_jadwal',
+            default => 'dibuka',
         };
     }
 
@@ -136,23 +165,45 @@ class JadwalMasuk
     }
 
     /**
-     * Menit dari sekarang sampai jam tujuan (0..1439), untuk hitungan "dibuka
-     * dalam X menit" di layar petugas. Dihitung di server supaya zona waktu
-     * perangkat petugas tidak berpengaruh.
+     * Menit sampai kategori ini benar-benar dibuka, sudah memperhitungkan hari
+     * sesinya. Dipakai untuk label "dibuka dalam 51 hari 15 jam" di layar
+     * petugas — dihitung di server supaya jam perangkat petugas tidak
+     * berpengaruh.
+     *
+     * null = tidak ada yang dihitung (tanpa jam masuk, atau sudah lewat).
      */
-    public static function menitKeJam(?string $jam, CarbonInterface $sekarang): ?int
-    {
-        if (! $jam) {
+    public static function menitKeBukaKategori(
+        ?string $jamMulai,
+        CarbonInterface $sekarang,
+        mixed $sesiMulai = null,
+    ): ?int {
+        if (! $jamMulai) {
             return null;
         }
 
-        $selisih = self::detik($jam) - self::detik($sekarang->format('H:i:s'));
+        // Sebelum sesi dibuka, jam buka kategori jatuh pada hari sesi dimulai.
+        $sesiMulai = self::waktu($sesiMulai);
+        $hariAcuan = $sesiMulai && $sekarang->lt($sesiMulai)
+            ? $sesiMulai->copy()->startOfDay()
+            : $sekarang->copy()->startOfDay();
 
-        if ($selisih < 0) {
-            $selisih += 86400;
+        $buka = $hariAcuan->addSeconds(self::detik($jamMulai));
+
+        if ($buka->lte($sekarang)) {
+            return null;
         }
 
-        return (int) ceil($selisih / 60);
+        return (int) ceil($sekarang->diffInSeconds($buka) / 60);
+    }
+
+    /** Normalisasi tanggal dari Eloquent / string / null menjadi Carbon. */
+    private static function waktu(mixed $nilai): ?CarbonInterface
+    {
+        if ($nilai === null || $nilai === '') {
+            return null;
+        }
+
+        return $nilai instanceof CarbonInterface ? $nilai : Carbon::parse($nilai);
     }
 
     /** Ubah "08:00" / "08:00:00" menjadi detik sejak tengah malam. */

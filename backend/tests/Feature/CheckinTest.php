@@ -416,5 +416,17 @@ class CheckinTest extends TestCase
 
         $this->assertSame('sudah_ditutup', $kategori['Baby Shower']['status']);
         $this->assertSame('dibuka', $kategori['Reguler']['status']);
+
+        // Di luar hari sesi panel tidak boleh bilang "sudah ditutup" hanya karena
+        // jamnya sudah lewat hari ini — gerbangnya belum pernah dibuka hari itu.
+        $this->travelTo(Carbon::parse('2026-10-14 14:00:00'));
+
+        $kategori = collect(
+            $this->getJson("/api/partner/scan/sessions/{$event->id}")->json('kategori')
+        )->keyBy('nama_tiket');
+
+        $this->assertSame('belum_dibuka', $kategori['Baby Shower']['status']);
+        $this->assertSame('belum_dibuka', $kategori['Reguler']['status']);
+        $this->assertSame('tanpa_jadwal', $kategori['VIP']['status']);
     }
 }

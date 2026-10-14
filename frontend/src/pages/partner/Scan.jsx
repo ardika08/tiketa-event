@@ -21,7 +21,7 @@ const RESULT_STYLE = {
 // Status gelombang tiap kategori tiket di panel jadwal.
 const WAVE_STYLE = {
   dibuka: { dot: 'bg-emerald-500', teks: 'text-emerald-700', label: 'Sedang dibuka' },
-  belum_dibuka: { dot: 'bg-slate-300', teks: 'text-slate-500', label: 'Berikutnya' },
+  belum_dibuka: { dot: 'bg-slate-300', teks: 'text-slate-500', label: 'Belum dibuka' },
   sudah_ditutup: { dot: 'bg-rose-400', teks: 'text-rose-600', label: 'Sudah tutup' },
   tanpa_jadwal: { dot: 'bg-slate-300', teks: 'text-slate-400', label: 'Tanpa jam masuk' },
 }
@@ -239,7 +239,10 @@ export default function Scan() {
                       </p>
                       <p className="text-xs text-slate-500">
                         {jadwal}
-                        {k.status === 'belum_dibuka' && labelMenuju(k.menit_ke_buka)
+                        {/* Hitung mundur hanya kalau tinggal <= 24 jam. Di luar
+                            hari-H, 15 baris "dibuka dalam 51 hari" cuma bising —
+                            banner di atas sudah membawa hitungan besarnya. */}
+                        {k.status === 'belum_dibuka' && k.menit_ke_buka !== null && k.menit_ke_buka <= 1440
                           ? ` · dibuka dalam ${labelMenuju(k.menit_ke_buka)}`
                           : ''}
                       </p>
