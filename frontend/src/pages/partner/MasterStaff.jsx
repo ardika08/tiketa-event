@@ -87,9 +87,10 @@ export default function MasterStaff() {
       setModalOpen(false)
       reload()
     } catch (err) {
-      const respon = err.response?.data
-      const pesanField = respon?.errors ? Object.values(respon.errors)[0]?.[0] : null
-      setFormError(pesanField || respon?.message || 'Gagal menyimpan staff.')
+      // ApiError membawa .errors dan .message langsung (lihat lib/api.js),
+      // bukan err.response.data seperti axios biasa.
+      const pesanField = err.errors ? Object.values(err.errors)[0]?.[0] : null
+      setFormError(pesanField || err.message || 'Gagal menyimpan staff.')
     } finally {
       setSaving(false)
     }
@@ -103,7 +104,7 @@ export default function MasterStaff() {
       setDeleteTarget(null)
       reload()
     } catch (err) {
-      alert(err.response?.data?.message || 'Gagal menghapus staff.')
+      alert(err.message || 'Gagal menghapus staff.')
     } finally {
       setDeleting(false)
     }
