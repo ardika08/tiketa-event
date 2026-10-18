@@ -429,4 +429,73 @@ class CheckinTest extends TestCase
         $this->assertSame('belum_dibuka', $kategori['Reguler']['status']);
         $this->assertSame('tanpa_jadwal', $kategori['VIP']['status']);
     }
+
+    /**
+     * Buka lebih awal (satu config global): gerbang menerima 30 menit sebelum
+     * jam masuk kategori, jam tutup tidak bergeser, dan pesan penolakan
+     * menyebut jam yang benar-benar ditegakkan (07:30), bukan jam resmi (08:00).
+     */
+    public function test_scan_opens_early_from_global_config(): void
+    {
+        config(['nontix.buka_lebih_awal_menit' => 30]);
+
+        Queue::fake();
+        [$user, $organizer] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+
+        $day1 = $event->sessions()->create(['label' => 'Day 1', 'nama_session' => 'Pembuka', 'urutan' => 1, 'kapasitas' => 100]);
+        $baby = $this->createTicketType($event, [
+            'nama_tiket' => 'Baby Shower',
+            'kuota' => 5,
+            'sisa_kuota' => 5,
+            'jam_masuk_mulai' => '08:00',
+            'jam_masuk_selesai' => '10:00',
+        ], [$day1->id]);
+
+        $kode = $this->postJson('/api/orders', [
+            'event_id' => $event->id,
+            'nama' => 'Budi',
+            'email' => 'budi@mail.com',
+            'whatsapp' => '08123456789',
+            'items' => [['ticket_type_id' => $baby->id, 'jumlah' => 3]],
+        ])->json('data.kode_order');
+
+        $this->getJson("/api/payments/{$kode}/fake")->assertOk();
+
+        $passes = Order::where('kode_order', $kode)->with('tickets.passes')->firstOrFail()
+            ->tickets->flatMap->passes->values();
+
+        Sanctum::actingAs($user);
+
+        // 07:29 — satu menit sebelum gerbang buka: ditolak, dan pesannya
+        // menyebut 07:30 supaya petugas tidak salah ngomong ke pengunjung.
+        $this->travelTo(Carbon::parse('2026-11-15 07:29:00'));
+
+        $respon = $this->postJson('/api/partner/scan', [
+            'event_id' => $event->id, 'session_id' => $day1->id, 'kode_qr' => $passes[0]->kode_qr,
+        ])->assertOk()->assertJsonPath('status', 'not_open');
+
+        $this->assertStringContainsString('07:30', (string) $respon->json('message'));
+
+        // 07:30 — gerbang buka.
+        $this->travelTo(Carbon::parse('2026-11-15 07:30:00'));
+
+        $this->postJson('/api/partner/scan', [
+            'event_id' => $event->id, 'session_id' => $day1->id, 'kode_qr' => $passes[0]->kode_qr,
+        ])->assertOk()->assertJsonPath('status', 'valid');
+
+        // 10:00 — masih lolos: hanya sisi buka yang bergeser.
+        $this->travelTo(Carbon::parse('2026-11-15 10:00:00'));
+
+        $this->postJson('/api/partner/scan', [
+            'event_id' => $event->id, 'session_id' => $day1->id, 'kode_qr' => $passes[1]->kode_qr,
+        ])->assertOk()->assertJsonPath('status', 'valid');
+
+        // 10:01 — tutup seperti biasa.
+        $this->travelTo(Carbon::parse('2026-11-15 10:01:00'));
+
+        $this->postJson('/api/partner/scan', [
+            'event_id' => $event->id, 'session_id' => $day1->id, 'kode_qr' => $passes[2]->kode_qr,
+        ])->assertOk()->assertJsonPath('status', 'closed');
+    }
 }

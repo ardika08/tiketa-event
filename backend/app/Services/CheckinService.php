@@ -150,15 +150,20 @@ class CheckinService
             $kategori = $pass->ticket?->ticketType;
 
             if ($kategori) {
-                $jendelaKategori = JadwalMasuk::statusJam($kategori->jam_masuk_mulai, $kategori->jam_masuk_selesai, $sekarang);
+                // Gerbang bisa menerima lebih awal dari jam masuk resmi (config
+                // nontix.buka_lebih_awal_menit). Semua pesan memakai jam yang
+                // BENAR-BENAR ditegakkan, supaya petugas tidak menyebut 08:00
+                // padahal pengunjung sudah boleh masuk sejak 07:30.
+                $bukaKategori = JadwalMasuk::jamBukaEfektif($kategori->jam_masuk_mulai);
+                $jendelaKategori = JadwalMasuk::statusJam($bukaKategori, $kategori->jam_masuk_selesai, $sekarang);
 
                 if ($jendelaKategori === 'belum') {
                     $record(CheckinStatus::FAILED, 'Di luar jam masuk kategori', $pass);
 
                     return [
                         'status' => 'not_open',
-                        'message' => 'Tiket '.$kategori->nama_tiket.' baru dibuka pukul '.JadwalMasuk::jam($kategori->jam_masuk_mulai).' WIB. Sekarang '.$sekarang->format('H:i').' WIB.',
-                        'pesan_pengunjung' => 'Mohon maaf, tiket '.$kategori->nama_tiket.' baru dapat masuk pukul '.JadwalMasuk::jam($kategori->jam_masuk_mulai).' WIB.',
+                        'message' => 'Tiket '.$kategori->nama_tiket.' baru dibuka pukul '.$bukaKategori.' WIB. Sekarang '.$sekarang->format('H:i').' WIB.',
+                        'pesan_pengunjung' => 'Mohon maaf, tiket '.$kategori->nama_tiket.' baru dapat masuk pukul '.$bukaKategori.' WIB.',
                         'pass' => $pass,
                     ];
                 }

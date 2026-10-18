@@ -77,6 +77,7 @@ export default function Scan() {
   const kategori = sessionsData?.kategori || []
   const sesiAktifId = sessionsData?.sesi_aktif_id ?? null
   const adaJadwalSesi = sessionsData?.ada_jadwal_sesi ?? false
+  const bukaLebihAwal = sessionsData?.buka_lebih_awal_menit ?? 0
   const sekarangIso = sessionsData?.sekarang
 
   // Sesi TIDAK dipilih petugas: backend sudah menentukan sesi yang sedang
@@ -213,17 +214,19 @@ export default function Scan() {
                 {kategori.length} kategori · 1 gerbang · jam server WIB
               </span>
             </div>
+            {bukaLebihAwal > 0 && (
+              <p className="mt-1 text-xs text-amber-700">
+                Gerbang menerima {bukaLebihAwal} menit sebelum jam masuk kategori. Jam tutup tidak bergeser.
+              </p>
+            )}
             <div className="mt-3 space-y-2">
               {kategori.map((k) => {
                 const gaya = WAVE_STYLE[k.status] || WAVE_STYLE.tanpa_jadwal
                 const dibuka = k.status === 'dibuka'
-                const jadwal = k.jam_masuk_mulai && k.jam_masuk_selesai
-                  ? `${k.jam_masuk_mulai}–${k.jam_masuk_selesai} WIB`
-                  : k.jam_masuk_mulai
-                    ? `mulai ${k.jam_masuk_mulai} WIB`
-                    : k.jam_masuk_selesai
-                      ? `sampai ${k.jam_masuk_selesai} WIB`
-                      : 'Tanpa batas jam'
+                // Pakai jendela yang ditegakkan gerbang (label_gerbang), bukan
+                // jam resmi, supaya badge hijau tidak bertabrakan dengan angka
+                // di baris yang sama ketika "buka lebih awal" aktif.
+                const jadwal = k.label_gerbang ? `${k.label_gerbang} WIB` : 'Tanpa batas jam'
                 return (
                   <div
                     key={k.id}

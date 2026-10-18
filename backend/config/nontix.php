@@ -30,6 +30,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Buka Lebih Awal di Gerbang (menit)
+    |--------------------------------------------------------------------------
+    | Berapa menit SEBELUM jam masuk kategori gerbang sudah menerima QR.
+    | Contoh: kategori 08:00–10:00 dengan nilai 30 -> gerbang menerima sejak
+    | 07:30, jam tutup tetap 10:00. Satu nilai untuk seluruh platform.
+    |
+    | 0 = mati (perilaku bawaan: QR hanya sah mulai jam masuk persis).
+    | Dibatasi 0..240 oleh App\Support\JadwalMasuk.
+    */
+    'buka_lebih_awal_menit' => (int) env('NONTIX_BUKA_LEBIH_AWAL_MENIT', 0),
+
+    /*
+    |--------------------------------------------------------------------------
     | Pencairan Dana Partner
     |--------------------------------------------------------------------------
     | Minimal saldo bersih yang bisa diajukan partner untuk pencairan.

@@ -79,6 +79,13 @@ class ScanController extends PartnerController
                     'jam_masuk_mulai' => JadwalMasuk::jam($t->jam_masuk_mulai) ?: null,
                     'jam_masuk_selesai' => JadwalMasuk::jam($t->jam_masuk_selesai) ?: null,
                     'label_jam' => JadwalMasuk::labelJam($t->jam_masuk_mulai, $t->jam_masuk_selesai),
+                    // Jendela yang benar-benar ditegakkan gerbang (sudah digeser
+                    // "buka lebih awal"). Dipakai layar petugas supaya badge
+                    // hijau selalu cocok dengan jam yang tertulis di baris itu.
+                    'label_gerbang' => JadwalMasuk::labelJam(
+                        JadwalMasuk::jamBukaEfektif($t->jam_masuk_mulai),
+                        $t->jam_masuk_selesai,
+                    ),
                     // Konteks hari sesi dikirim ikut: di luar hari-H semua
                     // kategori harus terbaca "belum dibuka", bukan "sudah
                     // ditutup" hanya karena jamnya sudah lewat hari ini.
@@ -115,6 +122,7 @@ class ScanController extends PartnerController
             'sesi_aktif_id' => $sesiAktif?->id,
             'ada_jadwal_sesi' => $sessions->contains(fn (EventSession $s) => $s->tanggal_mulai !== null || $s->tanggal_selesai !== null),
             'sekarang' => $sekarang->toIso8601String(),
+            'buka_lebih_awal_menit' => JadwalMasuk::menitBukaLebihAwal(),
         ]);
     }
 

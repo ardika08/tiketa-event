@@ -81,6 +81,48 @@ class JadwalMasuk
     }
 
     /**
+     * Berapa menit SEBELUM jam masuk gerbang sudah menerima QR.
+     *
+     * Satu kebijakan untuk seluruh platform (config nontix.buka_lebih_awal_menit),
+     * bukan pengaturan per kategori — keputusan user: hanya gelombang pertama
+     * yang benar-benar terdampak, gelombang berikutnya sudah bisa di-scan karena
+     * gelombang sebelumnya masih berjalan.
+     *
+     * 0 = mati (perilaku bawaan). Dibatasi 0..240 supaya salah isi .env tidak
+     * membuka gerbang berjam-jam lebih awal tanpa disadari.
+     */
+    public static function menitBukaLebihAwal(): int
+    {
+        return max(0, min(240, (int) config('nontix.buka_lebih_awal_menit', 0)));
+    }
+
+    /**
+     * Jam masuk yang benar-benar ditegakkan gerbang: jam masuk resmi digeser
+     * "buka lebih awal". Jam tutup TIDAK ikut bergeser — pengunjung hanya bisa
+     * masuk lebih awal, bukan lebih lama.
+     */
+    public static function jamBukaEfektif(?string $jamMasuk): ?string
+    {
+        if (! $jamMasuk) {
+            return null;
+        }
+
+        $lebihAwal = self::menitBukaLebihAwal();
+
+        if ($lebihAwal <= 0) {
+            return self::jam($jamMasuk);
+        }
+
+        $detik = (self::detik($jamMasuk) - $lebihAwal * 60) % 86400;
+
+        if ($detik < 0) {
+            $detik += 86400;
+        }
+
+        return sprintf('%02d:%02d', intdiv($detik, 3600) % 24, intdiv($detik, 60) % 60);
+    }
+
+    /**
      * Status untuk panel gelombang di halaman scan.
      *
      * $sesiMulai / $sesiSelesai = jendela hari sesi yang sedang ditampilkan.
@@ -101,7 +143,9 @@ class JadwalMasuk
         mixed $sesiMulai = null,
         mixed $sesiSelesai = null,
     ): string {
-        if (self::statusJam($mulai, $selesai, $sekarang) === null) {
+        $buka = self::jamBukaEfektif($mulai);
+
+        if (self::statusJam($buka, $selesai, $sekarang) === null) {
             return 'tanpa_jadwal';
         }
 
@@ -116,7 +160,7 @@ class JadwalMasuk
             return 'sudah_ditutup';
         }
 
-        return match (self::statusJam($mulai, $selesai, $sekarang)) {
+        return match (self::statusJam($buka, $selesai, $sekarang)) {
             'belum' => 'belum_dibuka',
             'lewat' => 'sudah_ditutup',
             default => 'dibuka',
@@ -181,13 +225,23 @@ class JadwalMasuk
             return null;
         }
 
+        $bukaJam = self::jamBukaEfektif($jamMulai);
+
+        // Geseran yang melewati tengah malam mundur (mis. 00:15 dengan 30 menit
+        // lebih awal -> 23:45 hari sebelumnya).
+        $melingkar = self::detik($bukaJam) > self::detik($jamMulai);
+
         // Sebelum sesi dibuka, jam buka kategori jatuh pada hari sesi dimulai.
         $sesiMulai = self::waktu($sesiMulai);
         $hariAcuan = $sesiMulai && $sekarang->lt($sesiMulai)
             ? $sesiMulai->copy()->startOfDay()
             : $sekarang->copy()->startOfDay();
 
-        $buka = $hariAcuan->addSeconds(self::detik($jamMulai));
+        $buka = $hariAcuan->addSeconds(self::detik($bukaJam));
+
+        if ($melingkar) {
+            $buka->subDay();
+        }
 
         if ($buka->lte($sekarang)) {
             return null;

@@ -4,7 +4,7 @@ namespace Tests\Unit;
 
 use App\Support\JadwalMasuk;
 use Illuminate\Support\Carbon;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 /**
  * Panel gelombang di halaman scan pernah salah baca: pukul 14:00 di hari biasa
@@ -131,5 +131,53 @@ class JadwalMasukTest extends TestCase
             'belum_dibuka',
             JadwalMasuk::statusKategori('08:00', '09:00', $sekarang, self::SESI_MULAI, self::SESI_SELESAI),
         );
+    }
+
+    public function test_buka_lebih_awal_menggeser_sisi_buka_saja(): void
+    {
+        config(['nontix.buka_lebih_awal_menit' => 30]);
+
+        $this->assertSame('07:30', JadwalMasuk::jamBukaEfektif('08:00'));
+
+        // 07:29 masih ditolak, 07:30 sudah lolos.
+        $this->assertSame('belum_dibuka', JadwalMasuk::statusKategori('08:00', '10:00', Carbon::parse('2026-11-15 07:29:00')));
+        $this->assertSame('dibuka', JadwalMasuk::statusKategori('08:00', '10:00', Carbon::parse('2026-11-15 07:30:00')));
+
+        // Jam tutup TIDAK bergeser: 10:00 masih lolos, 10:01 tutup.
+        $this->assertSame('dibuka', JadwalMasuk::statusKategori('08:00', '10:00', Carbon::parse('2026-11-15 10:00:00')));
+        $this->assertSame('sudah_ditutup', JadwalMasuk::statusKategori('08:00', '10:00', Carbon::parse('2026-11-15 10:01:00')));
+    }
+
+    public function test_buka_lebih_awal_nol_tidak_mengubah_apa_pun(): void
+    {
+        config(['nontix.buka_lebih_awal_menit' => 0]);
+
+        $this->assertSame('08:00', JadwalMasuk::jamBukaEfektif('08:00'));
+        $this->assertSame('belum_dibuka', JadwalMasuk::statusKategori('08:00', '10:00', Carbon::parse('2026-11-15 07:59:00')));
+    }
+
+    public function test_buka_lebih_awal_dibatasi_0_sampai_240_menit(): void
+    {
+        config(['nontix.buka_lebih_awal_menit' => 999]);
+        $this->assertSame(240, JadwalMasuk::menitBukaLebihAwal());
+        $this->assertSame('04:00', JadwalMasuk::jamBukaEfektif('08:00'));
+
+        config(['nontix.buka_lebih_awal_menit' => -10]);
+        $this->assertSame(0, JadwalMasuk::menitBukaLebihAwal());
+    }
+
+    public function test_buka_lebih_awal_bisa_mundur_melewati_tengah_malam(): void
+    {
+        config(['nontix.buka_lebih_awal_menit' => 30]);
+
+        $this->assertSame('23:45', JadwalMasuk::jamBukaEfektif('00:15'));
+    }
+
+    public function test_hitung_mundur_memakai_jam_buka_efektif(): void
+    {
+        config(['nontix.buka_lebih_awal_menit' => 30]);
+
+        // 07:00 → gerbang buka 07:30 = 30 menit, bukan 60 menit ke jam resmi.
+        $this->assertSame(30, JadwalMasuk::menitKeBukaKategori('08:00', Carbon::parse('2026-11-15 07:00:00')));
     }
 }
