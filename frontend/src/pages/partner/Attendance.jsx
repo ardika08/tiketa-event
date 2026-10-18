@@ -98,12 +98,13 @@ export default function Attendance() {
         totalKategoriPass ? Math.round((totalKategoriHadir / totalKategoriPass) * 100) : 0,
       ],
       [],
-      ['Nama Pemegang', 'Kode QR', 'Sesi', 'Gate', 'Waktu Check-in', 'Status', 'Catatan'],
+      ['Nama Pemegang', 'Kode QR', 'Sesi', 'Gate', 'Petugas', 'Waktu Check-in', 'Status', 'Catatan'],
       ...filtered.map((c) => [
         c.nama_pemegang,
         c.kode_qr,
         c.session?.label ?? '',
         c.gate?.nama_gate ?? '',
+        c.staff?.nama ?? '',
         c.checked_in_at ? formatTanggal(c.checked_in_at, { withTime: true }) : '',
         c.status,
         c.catatan ?? '',
@@ -291,6 +292,7 @@ export default function Attendance() {
                   <th className="px-5 py-3 font-semibold">Kode Tiket</th>
                   <th className="px-5 py-3 font-semibold">Sesi</th>
                   <th className="px-5 py-3 font-semibold">Gate</th>
+                  <th className="px-5 py-3 font-semibold">Petugas</th>
                   <th className="px-5 py-3 font-semibold">Waktu Masuk</th>
                   <th className="px-5 py-3 font-semibold">Status</th>
                 </tr>
@@ -304,6 +306,12 @@ export default function Attendance() {
                       <Badge color="slate">{c.session?.label ?? '—'}</Badge>
                     </td>
                     <td className="px-5 py-3 text-slate-600">{c.gate?.nama_gate ?? '—'}</td>
+                    <td className="px-5 py-3 text-slate-600">
+                      {c.staff?.nama ?? '—'}
+                      {c.staff?.peran && (
+                        <p className="text-xs text-slate-400">{c.staff.peran}</p>
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-slate-600">{formatTanggal(c.checked_in_at, { withTime: true })}</td>
                     <td className="px-5 py-3">
                       <StatusBadge status={c.status} />

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
-import { QrCode, ScanLine, CheckCircle2, XCircle, AlertTriangle, RotateCcw, CalendarDays, Camera, Loader2, Clock, CalendarX, Timer } from 'lucide-react'
+import { QrCode, ScanLine, CheckCircle2, XCircle, AlertTriangle, RotateCcw, CalendarDays, Camera, Loader2, Clock, CalendarX, Timer, UserCheck } from 'lucide-react'
 import { Button, Card, Input, PageHeader, Badge, Select } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
@@ -7,6 +7,11 @@ import { formatTanggal, cn } from '../../lib/utils'
 
 // html5-qrcode (±340KB) hanya diunduh saat petugas benar-benar membuka scanner.
 const QrScannerModal = lazy(() => import('../../components/QrScannerModal'))
+
+// Petugas dipilih SEKALI di awal shift lalu diingat browser. Tanpa ini setiap
+// scan tidak tercatat atas nama siapa (checkins.staff_id kosong), dan kolom
+// Petugas di Riwayat Kehadiran akan selalu kosong.
+const PETUGAS_KEY = 'nontix.petugas'
 
 const RESULT_STYLE = {
   valid: { bg: 'from-emerald-500 to-teal-600', icon: CheckCircle2, label: 'Berhasil' },
@@ -102,6 +107,35 @@ export default function Scan() {
   const [scanning, setScanning] = useState(false)
   const [cameraOpen, setCameraOpen] = useState(false)
 
+  // ── Petugas yang bertugas ────────────────────────────────────────────────
+  const { data: staffsData } = useApi(() => partnerApi.staffs(), [])
+  const staffs = (staffsData?.data || []).filter((s) => s.status === 'aktif')
+
+  const [staffId, setStaffId] = useState(() => {
+    if (typeof localStorage === 'undefined') return ''
+    return localStorage.getItem(PETUGAS_KEY) || ''
+  })
+
+  // Petugas yang tersimpan bisa sudah dihapus atau dinonaktifkan.
+  useEffect(() => {
+    if (!staffsData || !staffId) return
+
+    const masihAda = (staffsData.data || []).some((s) => String(s.id) === String(staffId))
+
+    if (!masihAda) {
+      setStaffId('')
+      localStorage.removeItem(PETUGAS_KEY)
+    }
+  }, [staffsData, staffId])
+
+  const petugas = staffs.find((s) => String(s.id) === String(staffId)) || null
+
+  const pilihPetugas = (value) => {
+    setStaffId(value)
+    if (value) localStorage.setItem(PETUGAS_KEY, value)
+    else localStorage.removeItem(PETUGAS_KEY)
+  }
+
   /**
    * Kirim kode QR ke backend. Sesi tidak dikirim sebagai penentu — backend
    * memakai sesi milik QR itu sendiri; session_id hanya cadangan untuk event
@@ -121,6 +155,10 @@ export default function Scan() {
       const res = await partnerApi.scan({
         event_id: eventId,
         ...(sesiAktifId ? { session_id: sesiAktifId } : {}),
+        // Siapa yang menerima tiket, dan lewat gate mana. Gate ikut dari
+        // penugasan petugas, bukan dipilih ulang di lapangan.
+        ...(staffId ? { staff_id: Number(staffId) } : {}),
+        ...(petugas?.gate_id ? { gate_id: petugas.gate_id } : {}),
         kode_qr: kode,
       })
       setResult(res)
@@ -139,7 +177,7 @@ export default function Scan() {
     } finally {
       setScanning(false)
     }
-  }, [eventId, sesiAktifId, activeSession, reload])
+  }, [eventId, sesiAktifId, activeSession, reload, staffId, petugas])
 
   const handleManualScan = () => {
     const value = code
@@ -190,6 +228,35 @@ export default function Scan() {
             )}
           </div>
         </div>
+
+        {staffs.length > 0 && (
+          <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <UserCheck size={16} className="text-brand-600" />
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Petugas yang bertugas</p>
+                <p className="text-xs text-slate-500">
+                  {petugas
+                    ? `Check-in dicatat atas nama ${petugas.nama}${petugas.gate?.nama_gate ? ` · ${petugas.gate.nama_gate}` : ''}. Cukup dipilih sekali.`
+                    : 'Belum dipilih — check-in tidak tercatat atas nama siapa.'}
+                </p>
+              </div>
+            </div>
+            <Select
+              value={staffId}
+              onChange={(e) => pilihPetugas(e.target.value)}
+              className="sm:w-64"
+              aria-label="Petugas yang bertugas"
+            >
+              <option value="">— Pilih petugas —</option>
+              {staffs.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nama}{s.gate?.nama_gate ? ` — ${s.gate.nama_gate}` : ''}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
 
         {!bolehScan && sesiBerikutnya && (
           <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">

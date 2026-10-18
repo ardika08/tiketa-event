@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Checkin;
+use App\Models\Gate;
 use App\Models\Order;
+use App\Models\Staff;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
@@ -497,5 +500,113 @@ class CheckinTest extends TestCase
         $this->postJson('/api/partner/scan', [
             'event_id' => $event->id, 'session_id' => $day1->id, 'kode_qr' => $passes[2]->kode_qr,
         ])->assertOk()->assertJsonPath('status', 'closed');
+    }
+
+    /**
+     * Petugas & gate ikut tercatat di riwayat check-in.
+     *
+     * Sebelumnya layar scan tidak mengirim staff_id/gate_id sama sekali, jadi
+     * kolom Petugas dan Gate di laporan selalu kosong. Sekalian mengunci bug
+     * tabel: nama tabelnya `staff` (tunggal), bukan `staffs`.
+     */
+    public function test_scan_mencatat_petugas_dan_gate(): void
+    {
+        Queue::fake();
+        [$user, $organizer] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+
+        $gate = Gate::create(['organizer_id' => $organizer->id, 'nama_gate' => 'Gate Utama']);
+        $petugas = Staff::create([
+            'organizer_id' => $organizer->id,
+            'gate_id' => $gate->id,
+            'nama' => 'Siti',
+            'peran' => 'Scanner',
+        ]);
+
+        $baby = $this->createTicketType($event, [
+            'nama_tiket' => 'Baby Shower',
+            'kuota' => 5,
+            'sisa_kuota' => 5,
+        ]);
+
+        $kode = $this->postJson('/api/orders', [
+            'event_id' => $event->id,
+            'nama' => 'Budi',
+            'email' => 'budi@mail.com',
+            'whatsapp' => '08123456789',
+            'items' => [['ticket_type_id' => $baby->id, 'jumlah' => 1]],
+        ])->json('data.kode_order');
+
+        $this->getJson("/api/payments/{$kode}/fake")->assertOk();
+
+        $pass = Order::where('kode_order', $kode)->with('tickets.passes')->firstOrFail()
+            ->tickets->flatMap->passes->values()->first();
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/partner/scan', [
+            'event_id' => $event->id,
+            'kode_qr' => $pass->kode_qr,
+            'staff_id' => $petugas->id,
+            'gate_id' => $gate->id,
+        ])->assertOk()->assertJsonPath('status', 'valid');
+
+        $checkin = Checkin::where('kode_qr', $pass->kode_qr)
+            ->where('status', 'berhasil')
+            ->firstOrFail();
+
+        $this->assertSame($petugas->id, $checkin->staff_id);
+        $this->assertSame($gate->id, $checkin->gate_id);
+
+        // Riwayat kehadiran membawa nama petugasnya, bukan hanya id.
+        $riwayat = $this->getJson("/api/partner/attendance?event_id={$event->id}")
+            ->assertOk()
+            ->json('checkins.0');
+
+        $this->assertSame('Siti', $riwayat['staff']['nama']);
+        $this->assertSame('Gate Utama', $riwayat['gate']['nama_gate']);
+    }
+
+    public function test_petugas_milik_organizer_lain_ditolak(): void
+    {
+        Queue::fake();
+        [$user, $organizer] = $this->createPartner();
+        [, $organizerLain] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+
+        $petugasLain = Staff::create([
+            'organizer_id' => $organizerLain->id,
+            'nama' => 'Bukan Milikmu',
+        ]);
+
+        $baby = $this->createTicketType($event, [
+            'nama_tiket' => 'Baby Shower',
+            'kuota' => 5,
+            'sisa_kuota' => 5,
+        ]);
+
+        $kode = $this->postJson('/api/orders', [
+            'event_id' => $event->id,
+            'nama' => 'Budi',
+            'email' => 'budi@mail.com',
+            'whatsapp' => '08123456789',
+            'items' => [['ticket_type_id' => $baby->id, 'jumlah' => 1]],
+        ])->json('data.kode_order');
+
+        $this->getJson("/api/payments/{$kode}/fake")->assertOk();
+
+        $pass = Order::where('kode_order', $kode)->with('tickets.passes')->firstOrFail()
+            ->tickets->flatMap->passes->values()->first();
+
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/partner/scan', [
+            'event_id' => $event->id,
+            'kode_qr' => $pass->kode_qr,
+            'staff_id' => $petugasLain->id,
+        ])->assertStatus(422)->assertJsonValidationErrors('staff_id');
+
+        // Tiket tidak boleh ikut terpakai oleh percobaan yang ditolak.
+        $this->assertSame(0, Checkin::where('kode_qr', $pass->kode_qr)->count());
     }
 }

@@ -12,6 +12,7 @@ use App\Services\CheckinService;
 use App\Support\JadwalMasuk;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class ScanController extends PartnerController
 {
@@ -135,8 +136,14 @@ class ScanController extends PartnerController
             // event yang tanggal sesinya belum diisi.
             'session_id' => ['nullable', 'exists:event_sessions,id'],
             'kode_qr' => ['required', 'string'],
-            'gate_id' => ['nullable', 'exists:gates,id'],
-            'staff_id' => ['nullable', 'exists:staffs,id'],
+            // Gate & staff wajib milik organizer ini. Catatan: tabel staff
+            // bernama `staff` (tunggal) — "staff" dianggap kata tak berbilang,
+            // jadi `exists:staffs,id` akan mencari tabel yang tidak ada.
+            'gate_id' => ['nullable', Rule::exists('gates', 'id')->where('organizer_id', $this->organizerId($request))],
+            'staff_id' => ['nullable', Rule::exists('staff', 'id')->where('organizer_id', $this->organizerId($request))],
+        ], [
+            'gate_id.exists' => 'Gate itu bukan milikmu.',
+            'staff_id.exists' => 'Staff itu bukan milikmu.',
         ]);
 
         $event = Event::where('organizer_id', $this->organizerId($request))->findOrFail($data['event_id']);
@@ -259,7 +266,7 @@ class ScanController extends PartnerController
 
         $checkins = Checkin::where('event_id', $event->id)
             ->when($data['session_id'] ?? null, fn ($q, $v) => $q->where('event_session_id', $v))
-            ->with(['session:id,label,nama_session', 'gate:id,nama_gate'])
+            ->with(['session:id,label,nama_session', 'gate:id,nama_gate', 'staff:id,nama,peran'])
             ->latest('checked_in_at')
             ->get();
 
