@@ -14,6 +14,12 @@ class Order extends Model
 {
     use HasFactory;
 
+    /** Pembelian lewat gateway pembayaran (alur normal pembeli). */
+    public const SUMBER_ONLINE = 'online';
+
+    /** Diinput partner: OTS, tunai, atau transfer langsung. */
+    public const SUMBER_MANUAL = 'manual';
+
     protected $fillable = [
         'event_id',
         'kode_order',
@@ -33,6 +39,10 @@ class Order extends Model
         'status',
         'batas_bayar',
         'paid_at',
+        'sumber',
+        'metode_bayar',
+        'catatan_manual',
+        'created_by',
     ];
 
     protected function casts(): array
@@ -91,6 +101,18 @@ class Order extends Model
     public function isPaid(): bool
     {
         return $this->status === OrderStatus::PAID;
+    }
+
+    /** Diinput partner lewat "Jual Tiket Manual" (tanpa gateway). */
+    public function isManual(): bool
+    {
+        return $this->sumber === self::SUMBER_MANUAL;
+    }
+
+    /** Partner yang menginput order manual. */
+    public function pembuat(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     /**

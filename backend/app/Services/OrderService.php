@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Jobs\SendOrderPaidEmail;
+use App\Models\EmailLog;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\Ticket;
@@ -116,6 +117,133 @@ class OrderService
 
             return $order->fresh($this->relations());
         });
+    }
+
+    /**
+     * Penjualan manual oleh partner: OTS, tunai, atau transfer langsung.
+     *
+     * Bedanya dengan create():
+     *  - Tidak lewat gateway. Order langsung lunas (paid_at = sekarang) dan
+     *    tiket + QR dibuat saat itu juga, karena uang sudah diterima di tangan.
+     *  - Tidak ada batas bayar, jadi tidak ada order pending yang bisa kadaluarsa.
+     *  - max_per_order tidak dipakai: penjualan di lokasi sering rombongan,
+     *    batasnya cukup sisa kuota.
+     *  - biaya_layanan TETAP dipungut (config service_fee x jumlah tiket) karena
+     *    e-ticket-nya tetap dikirim lewat kuota email platform. Nilainya masuk
+     *    laporan sebagai pengurang pendapatan partner (ReportService), jadi
+     *    tidak perlu mekanisme penagihan terpisah.
+     *
+     * @param  array<int, array{ticket_type_id:int, jumlah:int}>  $items
+     * @param  array<string, mixed>  $buyer
+     */
+    public function createManual(
+        Event $event,
+        array $buyer,
+        array $items,
+        string $metodeBayar,
+        ?string $catatan = null,
+        ?int $dibuatOleh = null,
+    ): Order {
+        if (empty($items)) {
+            throw ValidationException::withMessages(['items' => 'Pilih minimal satu tiket.']);
+        }
+
+        $order = DB::transaction(function () use ($event, $buyer, $items, $metodeBayar, $catatan, $dibuatOleh) {
+            $jumlahTiket = 0;
+            $subtotal = 0.0;
+            $resolved = [];
+
+            foreach ($items as $row) {
+                /** @var TicketType|null $ticketType */
+                $ticketType = TicketType::where('event_id', $event->id)
+                    ->lockForUpdate()
+                    ->find($row['ticket_type_id']);
+
+                if (! $ticketType) {
+                    throw ValidationException::withMessages([
+                        'items' => 'Jenis tiket tidak ditemukan pada event ini.',
+                    ]);
+                }
+
+                $jumlah = (int) $row['jumlah'];
+
+                if ($jumlah < 1) {
+                    throw ValidationException::withMessages([
+                        'items' => "Jumlah tiket {$ticketType->nama_tiket} tidak valid.",
+                    ]);
+                }
+
+                if (! $ticketType->hasStock($jumlah)) {
+                    throw ValidationException::withMessages([
+                        'items' => "Sisa kuota {$ticketType->nama_tiket} tidak mencukupi (tersisa {$ticketType->sisa_kuota}).",
+                    ]);
+                }
+
+                $subtotal += (float) $ticketType->harga * $jumlah;
+                $jumlahTiket += $jumlah;
+                $resolved[] = [$ticketType, $jumlah];
+            }
+
+            $total = $subtotal;
+
+            $order = Order::create([
+                'event_id' => $event->id,
+                'nama_pembeli' => $buyer['nama'],
+                'email' => $buyer['email'],
+                'whatsapp' => $buyer['whatsapp'],
+                'instagram' => $buyer['instagram'] ?? null,
+                'tiktok' => $buyer['tiktok'] ?? null,
+                'threads' => $buyer['threads'] ?? null,
+                'subtotal' => $subtotal,
+                'diskon' => 0,
+                'total_harga' => $total,
+                // Tetap dipungut: pengiriman e-ticket memakai kuota email platform.
+                'biaya_layanan' => (float) config('nontix.service_fee') * $jumlahTiket,
+                'status' => OrderStatus::PAID,
+                'paid_at' => now(),
+                'sumber' => Order::SUMBER_MANUAL,
+                'metode_bayar' => $metodeBayar,
+                'catatan_manual' => $catatan,
+                'created_by' => $dibuatOleh,
+            ]);
+
+            foreach ($resolved as [$ticketType, $jumlah]) {
+                $order->items()->create([
+                    'ticket_type_id' => $ticketType->id,
+                    'jumlah' => $jumlah,
+                    'harga_satuan' => $ticketType->harga,
+                    'subtotal' => (float) $ticketType->harga * $jumlah,
+                ]);
+
+                $ticketType->decrement('sisa_kuota', $jumlah);
+                $ticketType->refresh();
+
+                StockLedger::record($ticketType, -$jumlah, StockLedger::SALE, $order->kode_order);
+            }
+
+            // Tercatat sebagai pembayaran berhasil tanpa gateway, supaya detail
+            // order tidak terlihat seperti "lunas tanpa jejak pembayaran".
+            $order->payments()->create([
+                'jumlah' => $total,
+                'status' => PaymentStatus::SUCCESS,
+                'paid_at' => now(),
+                'metode' => $metodeBayar,
+                'provider' => 'manual',
+                'payload' => [
+                    'sumber' => 'manual',
+                    'oleh_user_id' => $dibuatOleh,
+                    'catatan' => $catatan,
+                ],
+            ]);
+
+            $this->generateTickets($order);
+
+            return $order->fresh($this->relations());
+        });
+
+        SendOrderPaidEmail::dispatch($order->id, EmailLog::JENIS_MANUAL_ORDER);
+
+        return $order;
     }
 
     /**

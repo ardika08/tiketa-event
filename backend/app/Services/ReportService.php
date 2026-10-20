@@ -186,7 +186,12 @@ class ReportService
     {
         return Order::query()
             ->whereHas('event', fn ($q) => $q->where('organizer_id', $organizerId))
-            ->with(['event:id,nama_event', 'items.ticketType:id,nama_tiket', 'tickets:id,order_id,kode_tiket,status_kehadiran'])
+            ->with([
+                'event:id,nama_event',
+                'items.ticketType:id,nama_tiket',
+                'tickets:id,order_id,kode_tiket,status_kehadiran',
+                'pembuat:id,nama',
+            ])
             ->latest('created_at')
             ->get()
             ->map(fn (Order $order) => [
@@ -207,6 +212,11 @@ class ReportService
                 'jumlah' => $order->items->sum('jumlah'),
                 'total' => (float) $order->total_harga,
                 'status' => $order->status,
+                // online = lewat gateway, manual = diinput partner (OTS/tunai/transfer).
+                'sumber' => $order->sumber ?? Order::SUMBER_ONLINE,
+                'metode_bayar' => $order->metode_bayar,
+                'catatan_manual' => $order->catatan_manual,
+                'dibuat_oleh' => $order->pembuat?->nama,
                 'batas_bayar' => $order->batas_bayar?->toIso8601String(),
                 'tanggal' => ($order->paid_at ?? $order->created_at)?->toIso8601String(),
             ])

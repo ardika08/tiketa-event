@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
-import { Search, Download, Send, Loader2, CheckCircle2, AlertCircle, Users, ChevronLeft, ChevronRight, ChevronDown, Mail, History } from 'lucide-react'
+import { Search, Download, Send, Loader2, CheckCircle2, AlertCircle, Users, ChevronLeft, ChevronRight, ChevronDown, Mail, History, Plus } from 'lucide-react'
 import { Button, Card, Input, PageHeader, Select, StatusBadge, EmptyState, Modal, Field } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
@@ -13,12 +13,33 @@ const LABEL_JENIS_EMAIL = {
   invoice: 'Invoice otomatis',
   resend: 'Kirim ulang',
   manual_alternative: 'Manual ke email lain',
+  manual_order: 'Pembelian manual',
 }
 
 const WARNA_STATUS_EMAIL = {
   terkirim: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   proses: 'bg-amber-50 text-amber-700 ring-amber-200',
   gagal: 'bg-rose-50 text-rose-700 ring-rose-200',
+}
+
+const METODE_MANUAL = [
+  { value: 'tunai', label: 'Tunai' },
+  { value: 'transfer', label: 'Transfer' },
+  { value: 'bayar_di_lokasi', label: 'Bayar di lokasi (OTS)' },
+]
+
+const LABEL_METODE = Object.fromEntries(METODE_MANUAL.map((m) => [m.value, m.label]))
+
+const FORM_MANUAL_KOSONG = {
+  event_id: '',
+  ticket_type_id: '',
+  jumlah: 1,
+  nama: '',
+  email: '',
+  whatsapp: '',
+  instagram: '',
+  metode_bayar: 'tunai',
+  catatan: '',
 }
 
 /** Panel jawaban formulir custom untuk satu order (mendukung format baru & lama). */
@@ -90,7 +111,14 @@ export default function Buyers() {
   const [riwayat, setRiwayat] = useState(null)
   const [riwayatLoading, setRiwayatLoading] = useState(false)
 
-  const { data, loading } = useApi(() => partnerApi.buyers(), [])
+  // Penjualan manual (OTS/tunai/transfer).
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualForm, setManualForm] = useState(FORM_MANUAL_KOSONG)
+  const [manualError, setManualError] = useState('')
+  const [manualSaving, setManualSaving] = useState(false)
+  const [manualHasil, setManualHasil] = useState(null)
+
+  const { data, loading, reload } = useApi(() => partnerApi.buyers(), [])
   const { data: eventsData } = useApi(() => partnerApi.events(), [])
   const buyers = data?.data || []
   const events = eventsData?.data || []
@@ -175,13 +203,68 @@ export default function Buyers() {
     }
   }
 
+  // ---- Penjualan manual (OTS / tunai / transfer) ----
+  const eventManual = events.find((e) => String(e.id) === String(manualForm.event_id)) || null
+  const kategoriManual = eventManual?.tiket || []
+  const kategoriTerpilih = kategoriManual.find((t) => String(t.id) === String(manualForm.ticket_type_id)) || null
+  const totalManual = kategoriTerpilih ? Number(kategoriTerpilih.harga) * Number(manualForm.jumlah || 0) : 0
+
+  function bukaManual() {
+    setManualForm(FORM_MANUAL_KOSONG)
+    setManualError('')
+    setManualHasil(null)
+    setManualOpen(true)
+  }
+
+  function ubahManual(patch) {
+    setManualForm((f) => ({ ...f, ...patch }))
+  }
+
+  async function simpanManual(e) {
+    e?.preventDefault()
+    if (!manualForm.event_id) return setManualError('Pilih event dulu.')
+    if (!manualForm.ticket_type_id) return setManualError('Pilih kategori tiket.')
+    if (!manualForm.nama.trim()) return setManualError('Nama pembeli wajib diisi.')
+    if (!manualForm.email.trim()) return setManualError('Email wajib diisi — e-ticket dan QR dikirim ke sini.')
+    if (!manualForm.whatsapp.trim()) return setManualError('Nomor WhatsApp wajib diisi.')
+
+    setManualSaving(true)
+    setManualError('')
+    try {
+      const res = await partnerApi.buatOrderManual({
+        event_id: Number(manualForm.event_id),
+        nama: manualForm.nama.trim(),
+        email: manualForm.email.trim(),
+        whatsapp: manualForm.whatsapp.trim(),
+        instagram: manualForm.instagram.trim() || null,
+        metode_bayar: manualForm.metode_bayar,
+        catatan: manualForm.catatan.trim() || null,
+        items: [{
+          ticket_type_id: Number(manualForm.ticket_type_id),
+          jumlah: Number(manualForm.jumlah),
+        }],
+      })
+      setManualHasil(res?.data || null)
+      setNotif({ ok: true, text: res?.message || 'Tiket manual dibuat.' })
+      reload()
+    } catch (err) {
+      const pesanField = err.errors ? Object.values(err.errors)[0]?.[0] : null
+      setManualError(pesanField || err.message || 'Gagal membuat tiket manual.')
+    } finally {
+      setManualSaving(false)
+    }
+  }
+
   // Ekspor CSV dari baris yang sedang tampil (ikut filter & pencarian),
   // supaya isi berkasnya sama dengan yang dilihat partner di layar.
   function ekspor() {
-    const header = ['Kode Pesanan', 'Nama Pembeli', 'Email', 'WhatsApp', 'Instagram', 'TikTok', 'Threads', 'Event', 'Tiket', 'Jumlah', 'Total', 'Status', 'Tanggal']
+    const header = ['Kode Pesanan', 'Nama Pembeli', 'Email', 'WhatsApp', 'Instagram', 'TikTok', 'Threads', 'Event', 'Tiket', 'Jumlah', 'Total', 'Status', 'Sumber', 'Metode Bayar', 'Diinput Oleh', 'Tanggal']
     const body = filtered.map((b) => [
       b.kode_order, b.nama, b.email, b.whatsapp, b.instagram, b.tiktok, b.threads,
-      b.event, b.tiket, b.jumlah, b.total, b.status, formatTanggal(b.tanggal, { withTime: true }),
+      b.event, b.tiket, b.jumlah, b.total, b.status,
+      b.sumber === 'manual' ? 'Manual' : 'Online',
+      LABEL_METODE[b.metode_bayar] || '', b.dibuat_oleh || '',
+      formatTanggal(b.tanggal, { withTime: true }),
     ])
     downloadCsv(namaFileCsv('data-pembeli'), [header, ...body])
   }
@@ -192,9 +275,14 @@ export default function Buyers() {
         title="Data Pembeli"
         description={`Semua pesanan tiket beserta kontaknya. ${jumlahLunas} dari ${buyers.length} sudah lunas. Klik baris untuk melihat jawaban formulir.`}
         action={
-          <Button variant="secondary" onClick={ekspor} disabled={filtered.length === 0}>
-            <Download size={16} /> Ekspor
-          </Button>
+          <>
+            <Button onClick={bukaManual}>
+              <Plus size={16} /> Jual Tiket Manual
+            </Button>
+            <Button variant="secondary" onClick={ekspor} disabled={filtered.length === 0}>
+              <Download size={16} /> Ekspor
+            </Button>
+          </>
         }
       />
 
@@ -268,6 +356,14 @@ export default function Buyers() {
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-1.5">
                           <StatusBadge status={b.status} />
+                          {b.sumber === 'manual' && (
+                            <span
+                              className="ml-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-inset ring-slate-200"
+                              title={`Penjualan manual${b.dibuat_oleh ? ` · diinput ${b.dibuat_oleh}` : ''}`}
+                            >
+                              Manual
+                            </span>
+                          )}
                           <ChevronDown
                             size={15}
                             className={`shrink-0 text-slate-400 transition-transform ${expanded === b.id ? 'rotate-180' : ''}`}
@@ -453,6 +549,176 @@ export default function Buyers() {
               Status "terkirim" berarti email sudah diterima antrean pengirim, bukan jaminan masuk inbox.
             </p>
           </div>
+        )}
+      </Modal>
+
+      {/* Penjualan manual: OTS / tunai / transfer. Langsung lunas, QR dibuat,
+          e-ticket dikirim. Tidak lewat gateway — jadi tidak ada verifikasi uang. */}
+      <Modal
+        open={manualOpen}
+        onClose={() => setManualOpen(false)}
+        title="Jual Tiket Manual"
+        size="lg"
+        footer={manualHasil ? (
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => { setManualForm(FORM_MANUAL_KOSONG); setManualHasil(null) }}
+            >
+              Input lagi
+            </Button>
+            <Button onClick={() => setManualOpen(false)}>Selesai</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={() => setManualOpen(false)} disabled={manualSaving}>Batal</Button>
+            <Button onClick={simpanManual} disabled={manualSaving}>
+              {manualSaving ? 'Menyimpan…' : 'Simpan & kirim e-ticket'}
+            </Button>
+          </>
+        )}
+      >
+        {manualHasil ? (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-600" />
+              <div className="text-sm text-emerald-800">
+                <p className="font-semibold">Tiket berhasil dibuat</p>
+                <p className="mt-1">
+                  <strong>{manualHasil.kode_order}</strong> · {manualHasil.nama} ·{' '}
+                  {manualHasil.jumlah_tiket} tiket · {formatRupiah(manualHasil.total_harga)}
+                </p>
+                <p className="mt-1">E-ticket dikirim ke <strong>{manualHasil.email}</strong>.</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500">
+              Pesanan ini sudah tampil di tabel pembeli sebagai <strong>lunas</strong> dan
+              langsung bisa di-scan di gerbang.
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={simpanManual} className="space-y-4">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              Tiket langsung aktif dan e-ticket dikirim ke email pembeli.
+              Penjualan manual tetap dikenakan biaya layanan platform sesuai tarif per tiket.
+            </div>
+
+            {manualError && (
+              <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                <span>{manualError}</span>
+              </div>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Event" required>
+                <Select
+                  value={manualForm.event_id}
+                  onChange={(e) => ubahManual({ event_id: e.target.value, ticket_type_id: '' })}
+                >
+                  <option value="">Pilih event</option>
+                  {events.map((e) => (
+                    <option key={e.id} value={e.id}>{e.nama_event}</option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field
+                label="Kategori tiket"
+                required
+                hint={kategoriTerpilih
+                  ? `Sisa kuota ${kategoriTerpilih.sisa_kuota} · ${formatRupiah(kategoriTerpilih.harga)}/tiket`
+                  : undefined}
+              >
+                <Select
+                  value={manualForm.ticket_type_id}
+                  onChange={(e) => ubahManual({ ticket_type_id: e.target.value })}
+                  disabled={!manualForm.event_id}
+                >
+                  <option value="">{manualForm.event_id ? 'Pilih kategori' : 'Pilih event dulu'}</option>
+                  {kategoriManual.map((t) => (
+                    <option key={t.id} value={t.id} disabled={Number(t.sisa_kuota) < 1}>
+                      {t.nama_tiket} — {formatRupiah(t.harga)} · sisa {t.sisa_kuota}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Jumlah tiket" required>
+                <Input
+                  type="number"
+                  min={1}
+                  max={kategoriTerpilih ? Math.min(50, Number(kategoriTerpilih.sisa_kuota)) : 50}
+                  value={manualForm.jumlah}
+                  onChange={(e) => ubahManual({ jumlah: e.target.value })}
+                />
+              </Field>
+              <Field label="Metode bayar" required>
+                <Select
+                  value={manualForm.metode_bayar}
+                  onChange={(e) => ubahManual({ metode_bayar: e.target.value })}
+                >
+                  {METODE_MANUAL.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </Select>
+              </Field>
+              <div className="flex items-end">
+                <div className="w-full rounded-xl bg-slate-50 px-3 py-2.5">
+                  <p className="text-xs text-slate-500">Total dibayar pembeli</p>
+                  <p className="text-base font-semibold text-slate-900">{formatRupiah(totalManual)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Nama pembeli" required>
+                <Input
+                  value={manualForm.nama}
+                  onChange={(e) => ubahManual({ nama: e.target.value })}
+                  placeholder="Nama sesuai KTP"
+                />
+              </Field>
+              <Field label="Email" required hint="E-ticket dan QR dikirim ke alamat ini.">
+                <Input
+                  type="email"
+                  value={manualForm.email}
+                  onChange={(e) => ubahManual({ email: e.target.value })}
+                  placeholder="nama@email.com"
+                />
+              </Field>
+              <Field label="WhatsApp" required>
+                <Input
+                  value={manualForm.whatsapp}
+                  onChange={(e) => ubahManual({ whatsapp: e.target.value })}
+                  placeholder="08xxxxxxxxxx"
+                />
+              </Field>
+              <Field label="Instagram" hint="Opsional.">
+                <Input
+                  value={manualForm.instagram}
+                  onChange={(e) => ubahManual({ instagram: e.target.value })}
+                  placeholder="@username"
+                />
+              </Field>
+            </div>
+
+            <Field label="Catatan internal" hint="Opsional — mis. nama penjual atau nomor referensi transfer.">
+              <textarea
+                className="input min-h-[72px]"
+                value={manualForm.catatan}
+                onChange={(e) => ubahManual({ catatan: e.target.value })}
+                placeholder="cth: dijual oleh Bu Rina, transfer BCA 21/10"
+              />
+            </Field>
+
+            <p className="text-xs text-slate-500">
+              Sistem tidak bisa memverifikasi uang masuk di jalur ini. Pastikan pembayaran
+              benar-benar diterima sebelum menyimpan — nama penginput ikut tercatat.
+            </p>
+          </form>
         )}
       </Modal>
     </div>

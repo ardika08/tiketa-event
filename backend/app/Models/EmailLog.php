@@ -10,6 +10,8 @@ class EmailLog extends Model
     public const JENIS_INVOICE = 'invoice';
     public const JENIS_RESEND = 'resend';
     public const JENIS_MANUAL = 'manual_alternative';
+    /** E-ticket dari penjualan manual partner (OTS/tunai/transfer). */
+    public const JENIS_MANUAL_ORDER = 'manual_order';
 
     public const STATUS_PROSES = 'proses';
     public const STATUS_TERKIRIM = 'terkirim';

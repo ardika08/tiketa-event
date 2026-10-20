@@ -26,6 +26,9 @@ class StockLedger
     /** Kuota dipesan pembeli (order baru dibuat). */
     public const RESERVE = 'reservasi_order';
 
+    /** Kuota terjual lewat input manual partner (OTS / di lokasi). */
+    public const SALE = 'penjualan_manual';
+
     /** Kuota kembali karena order dibatalkan / kadaluarsa. */
     public const RELEASE = 'pembatalan_order';
 

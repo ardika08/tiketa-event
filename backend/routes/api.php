@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Partner\EventController as PartnerEventController;
 use App\Http\Controllers\Api\Partner\FormFieldController;
 use App\Http\Controllers\Api\Partner\GateController;
+use App\Http\Controllers\Api\Partner\ManualOrderController;
 use App\Http\Controllers\Api\Partner\OrderController as PartnerOrderController;
 use App\Http\Controllers\Api\Partner\PayoutController;
 use App\Http\Controllers\Api\Partner\ProfileController;
@@ -127,6 +128,9 @@ Route::middleware(['auth:sanctum', 'sesi.idle'])->group(function () {
         Route::get('/orders/{order}/emails', [PartnerOrderController::class, 'riwayatEmail']);
         Route::post('/orders/{order}/email-alternatif', [PartnerOrderController::class, 'kirimKeEmailAlternatif'])
             ->middleware('throttle:10,10');
+        // Penjualan manual (OTS/tunai/transfer): langsung lunas + QR + email.
+        Route::post('/manual-orders', [ManualOrderController::class, 'store'])
+            ->middleware('throttle:60,10');
         Route::get('/finance', [PartnerReportController::class, 'finance']);
         Route::get('/sales', [PartnerReportController::class, 'sales']);
 

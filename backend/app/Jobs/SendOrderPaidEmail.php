@@ -17,8 +17,14 @@ class SendOrderPaidEmail implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(public int $orderId)
-    {
+    /**
+     * $jenis membedakan email invoice dari gateway vs dari penjualan manual
+     * partner, supaya riwayat pengiriman jujur soal asal pesanannya.
+     */
+    public function __construct(
+        public int $orderId,
+        public string $jenis = EmailLog::JENIS_INVOICE,
+    ) {
     }
 
     public function handle(OrderService $orders, EmailJejak $jejak): void
@@ -33,7 +39,7 @@ class SendOrderPaidEmail implements ShouldQueue
             new OrderPaidMail($order),
             $order,
             $order->email,
-            EmailLog::JENIS_INVOICE,
+            $this->jenis,
         );
     }
 }

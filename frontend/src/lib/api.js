@@ -230,6 +230,8 @@ export const partnerApi = {
   // Riwayat pengiriman email pesanan + jalur darurat kirim ke alamat lain.
   riwayatEmail: (orderId) => api.get(`/partner/orders/${orderId}/emails`),
   kirimEmailAlternatif: (orderId, payload) => api.post(`/partner/orders/${orderId}/email-alternatif`, payload),
+  // Penjualan manual (OTS/tunai/transfer): langsung lunas + QR + email.
+  buatOrderManual: (payload) => api.post('/partner/manual-orders', payload),
   finance: () => api.get('/partner/finance'),
   sales: () => api.get('/partner/sales'),
 
