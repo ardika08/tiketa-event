@@ -1,12 +1,25 @@
 import { Fragment, useMemo, useState } from 'react'
-import { Search, Download, Send, Loader2, CheckCircle2, AlertCircle, Users, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
-import { Button, Card, Input, PageHeader, Select, StatusBadge, EmptyState } from '../../components/ui'
+import { Search, Download, Send, Loader2, CheckCircle2, AlertCircle, Users, ChevronLeft, ChevronRight, ChevronDown, Mail, History } from 'lucide-react'
+import { Button, Card, Input, PageHeader, Select, StatusBadge, EmptyState, Modal, Field } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
 import { downloadCsv, namaFileCsv } from '../../lib/csv'
 
 const PER_PAGE = 6
+
+// Label & warna untuk riwayat pengiriman email (email_logs).
+const LABEL_JENIS_EMAIL = {
+  invoice: 'Invoice otomatis',
+  resend: 'Kirim ulang',
+  manual_alternative: 'Manual ke email lain',
+}
+
+const WARNA_STATUS_EMAIL = {
+  terkirim: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  proses: 'bg-amber-50 text-amber-700 ring-amber-200',
+  gagal: 'bg-rose-50 text-rose-700 ring-rose-200',
+}
 
 /** Panel jawaban formulir custom untuk satu order (mendukung format baru & lama). */
 function FormDataPanel({ order }) {
@@ -65,6 +78,18 @@ export default function Buyers() {
   const [sending, setSending] = useState(null)
   const [notif, setNotif] = useState(null)
 
+  // Kirim manual ke alamat lain (kasus email pembeli tidak sampai).
+  const [emailModal, setEmailModal] = useState(null)
+  const [emailTujuan, setEmailTujuan] = useState('')
+  const [emailKonfirmasi, setEmailKonfirmasi] = useState(false)
+  const [emailError, setEmailError] = useState('')
+  const [emailSending, setEmailSending] = useState(false)
+
+  // Riwayat pengiriman email satu pesanan.
+  const [riwayatModal, setRiwayatModal] = useState(null)
+  const [riwayat, setRiwayat] = useState(null)
+  const [riwayatLoading, setRiwayatLoading] = useState(false)
+
   const { data, loading } = useApi(() => partnerApi.buyers(), [])
   const { data: eventsData } = useApi(() => partnerApi.events(), [])
   const buyers = data?.data || []
@@ -97,6 +122,56 @@ export default function Buyers() {
       setNotif({ ok: false, text: e?.message || 'Gagal mengirim ulang e-ticket.' })
     } finally {
       setSending(null)
+    }
+  }
+
+  function bukaEmailLain(order) {
+    setEmailModal(order)
+    setEmailTujuan('')
+    setEmailKonfirmasi(false)
+    setEmailError('')
+  }
+
+  async function kirimEmailLain(e) {
+    e?.preventDefault()
+    if (!emailModal) return
+    if (!emailTujuan.trim()) {
+      setEmailError('Email tujuan wajib diisi.')
+      return
+    }
+    if (!emailKonfirmasi) {
+      setEmailError('Centang dulu bahwa email ini sudah diverifikasi dengan pembeli.')
+      return
+    }
+
+    setEmailSending(true)
+    setEmailError('')
+    try {
+      const res = await partnerApi.kirimEmailAlternatif(emailModal.id, {
+        email: emailTujuan.trim(),
+        konfirmasi: true,
+      })
+      setEmailModal(null)
+      setNotif({ ok: true, text: res?.message || 'E-ticket dikirim ke email alternatif.' })
+    } catch (err) {
+      const pesanField = err.errors ? Object.values(err.errors)[0]?.[0] : null
+      setEmailError(pesanField || err.message || 'Gagal mengirim e-ticket.')
+    } finally {
+      setEmailSending(false)
+    }
+  }
+
+  async function bukaRiwayat(order) {
+    setRiwayatModal(order)
+    setRiwayat(null)
+    setRiwayatLoading(true)
+    try {
+      const res = await partnerApi.riwayatEmail(order.id)
+      setRiwayat(res)
+    } catch (err) {
+      setRiwayat({ data: [], error: err.message })
+    } finally {
+      setRiwayatLoading(false)
     }
   }
 
@@ -205,17 +280,33 @@ export default function Buyers() {
                       </td>
                       <td className="px-5 py-3">
                         {b.status === 'lunas' ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={sending === b.id}
-                            onClick={(e) => { e.stopPropagation(); kirimUlang(b) }}
-                          >
-                            {sending === b.id
-                              ? <Loader2 size={15} className="animate-spin" />
-                              : <Send size={15} />}
-                            Kirim Ulang
-                          </Button>
+                          <div className="flex flex-col items-start gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={sending === b.id}
+                              onClick={(e) => { e.stopPropagation(); kirimUlang(b) }}
+                            >
+                              {sending === b.id
+                                ? <Loader2 size={15} className="animate-spin" />
+                                : <Send size={15} />}
+                              Kirim ulang
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); bukaEmailLain(b) }}
+                            >
+                              <Mail size={15} className="text-amber-600" /> Email lain
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); bukaRiwayat(b) }}
+                            >
+                              <History size={15} /> Riwayat
+                            </Button>
+                          </div>
                         ) : (
                           <span className="text-xs text-slate-300">—</span>
                         )}
@@ -252,6 +343,118 @@ export default function Buyers() {
           </div>
         )}
       </Card>
+
+      {/* Kirim manual ke alamat lain — HANYA untuk kasus email pembeli tidak
+          sampai. Email pesanan tidak diubah, dan setiap pemakaian tercatat. */}
+      <Modal
+        open={!!emailModal}
+        onClose={() => setEmailModal(null)}
+        title="Kirim e-ticket ke email lain"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEmailModal(null)} disabled={emailSending}>Batal</Button>
+            <Button onClick={kirimEmailLain} disabled={emailSending || !emailKonfirmasi}>
+              {emailSending ? 'Mengirim…' : 'Kirim'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={kirimEmailLain} className="space-y-4">
+          <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+            Pesanan <strong>{emailModal?.kode_order}</strong> · {emailModal?.nama}
+            <br />
+            Email pesanan: <strong>{emailModal?.email}</strong>
+          </div>
+
+          {emailError && (
+            <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>{emailError}</span>
+            </div>
+          )}
+
+          <Field
+            label="Email tujuan"
+            required
+            hint="Untuk kasus email pembeli tidak sampai (mis. diblokir penyedia email)."
+          >
+            <Input
+              type="email"
+              value={emailTujuan}
+              onChange={(e) => setEmailTujuan(e.target.value)}
+              placeholder="nama@email.com"
+              autoFocus
+            />
+          </Field>
+
+          <label className="flex items-start gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={emailKonfirmasi}
+              onChange={(e) => setEmailKonfirmasi(e.target.checked)}
+            />
+            <span>Saya sudah memverifikasi email ini dengan pembeli (via WhatsApp).</span>
+          </label>
+
+          <p className="text-xs text-slate-500">
+            Email pesanan <strong>tidak diubah</strong> — tiket tetap milik pembeli asli.
+            Ini hanya salinan ke alamat lain, dan tercatat di riwayat pengiriman.
+          </p>
+        </form>
+      </Modal>
+
+      {/* Riwayat pengiriman email pesanan: bukti saat pembeli bilang "belum terima". */}
+      <Modal
+        open={!!riwayatModal}
+        onClose={() => setRiwayatModal(null)}
+        title={`Riwayat email ${riwayatModal?.kode_order || ''}`}
+        size="lg"
+        footer={<Button variant="secondary" onClick={() => setRiwayatModal(null)}>Tutup</Button>}
+      >
+        {riwayatLoading ? (
+          <p className="py-6 text-center text-sm text-slate-500">Memuat riwayat…</p>
+        ) : (riwayat?.data || []).length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-500">
+            {riwayat?.error || 'Belum ada email yang tercatat untuk pesanan ini.'}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <p className="mb-2 text-xs text-slate-500">
+              Email pesanan saat ini: <strong>{riwayat?.email_pesanan}</strong>
+            </p>
+            {riwayat.data.map((e) => (
+              <div key={e.id} className="rounded-xl border border-slate-200 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-800">{e.tujuan}</p>
+                    <p className="text-xs text-slate-500">
+                      {LABEL_JENIS_EMAIL[e.jenis] || e.jenis}
+                      {' · '}
+                      {formatTanggal(e.waktu, { withTime: true })}
+                      {e.oleh ? ` · oleh ${e.oleh}` : ''}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${WARNA_STATUS_EMAIL[e.status] || 'bg-slate-50 text-slate-600 ring-slate-200'}`}
+                  >
+                    {e.status}
+                  </span>
+                </div>
+                {e.status === 'gagal' && e.error && (
+                  <p className="mt-1 text-xs text-rose-600">{e.error}</p>
+                )}
+                {e.message_id && (
+                  <p className="mt-1 truncate font-mono text-[11px] text-slate-400">{e.message_id}</p>
+                )}
+              </div>
+            ))}
+            <p className="pt-2 text-xs text-slate-400">
+              Status "terkirim" berarti email sudah diterima antrean pengirim, bukan jaminan masuk inbox.
+            </p>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

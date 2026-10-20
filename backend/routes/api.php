@@ -122,6 +122,11 @@ Route::middleware(['auth:sanctum', 'sesi.idle'])->group(function () {
         // sekaligus, tetapi mencegah klik berulang yang tak sengaja.
         Route::post('/orders/{order}/resend', [PartnerOrderController::class, 'resendTicket'])
             ->middleware('throttle:20,10');
+        // Riwayat email sebuah pesanan + jalur darurat "kirim ke email lain"
+        // (kasus email pembeli diblokir diam-diam, mis. @outlook.com).
+        Route::get('/orders/{order}/emails', [PartnerOrderController::class, 'riwayatEmail']);
+        Route::post('/orders/{order}/email-alternatif', [PartnerOrderController::class, 'kirimKeEmailAlternatif'])
+            ->middleware('throttle:10,10');
         Route::get('/finance', [PartnerReportController::class, 'finance']);
         Route::get('/sales', [PartnerReportController::class, 'sales']);
 

@@ -21,6 +21,14 @@
                 Ini email <strong>pengiriman ulang</strong>. Pesanan ini <strong>sudah lunas</strong> — tidak ada tagihan baru.
             </p>
 
+            @if (! empty($emailTujuanAlternatif))
+                <p style="margin:0 0 16px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:12px;color:#92400e;">
+                    Email ini dikirim ke alamat ini karena email pesanan
+                    (<strong>{{ $emailPesanan }}</strong>) tidak berhasil diterima.
+                    Tiket dan QR di bawah tetap sah — tunjukkan QR ini di pintu masuk.
+                </p>
+            @endif
+
             <table style="width:100%;font-size:14px;border-collapse:collapse;">
                 <tr><td style="padding:4px 0;color:#64748b;">Kode Order</td><td style="text-align:right;font-weight:bold;">{{ $order->kode_order }}</td></tr>
                 <tr><td style="padding:4px 0;color:#64748b;">Event</td><td style="text-align:right;">{{ $order->event->nama_event }}</td></tr>

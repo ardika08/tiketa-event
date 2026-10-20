@@ -227,6 +227,9 @@ export const partnerApi = {
   analytics: (params) => api.get(`/partner/analytics${query(params)}`),
   buyers: () => api.get('/partner/buyers'),
   resendTicket: (orderId) => api.post(`/partner/orders/${orderId}/resend`),
+  // Riwayat pengiriman email pesanan + jalur darurat kirim ke alamat lain.
+  riwayatEmail: (orderId) => api.get(`/partner/orders/${orderId}/emails`),
+  kirimEmailAlternatif: (orderId, payload) => api.post(`/partner/orders/${orderId}/email-alternatif`, payload),
   finance: () => api.get('/partner/finance'),
   sales: () => api.get('/partner/sales'),
 

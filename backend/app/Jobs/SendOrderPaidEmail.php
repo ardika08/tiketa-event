@@ -3,9 +3,10 @@
 namespace App\Jobs;
 
 use App\Mail\OrderPaidMail;
+use App\Models\EmailLog;
 use App\Models\Order;
-use App\Services\MailketingService;
 use App\Services\OrderService;
+use App\Support\EmailJejak;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -20,7 +21,7 @@ class SendOrderPaidEmail implements ShouldQueue
     {
     }
 
-    public function handle(OrderService $orders, MailketingService $mail): void
+    public function handle(OrderService $orders, EmailJejak $jejak): void
     {
         $order = Order::with($orders->relations())->find($this->orderId);
 
@@ -28,6 +29,11 @@ class SendOrderPaidEmail implements ShouldQueue
             return;
         }
 
-        $mail->send(new OrderPaidMail($order), $order->email);
+        $jejak->kirim(
+            new OrderPaidMail($order),
+            $order,
+            $order->email,
+            EmailLog::JENIS_INVOICE,
+        );
     }
 }
