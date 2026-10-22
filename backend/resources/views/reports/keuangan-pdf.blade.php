@@ -5,7 +5,7 @@
     <title>Laporan Keuangan — {{ $namaOrganizer ?: 'Nontix' }}</title>
     <style>
         /* DomPDF hanya mendukung CSS 2.1 — tanpa flexbox/grid, tabel untuk layout. */
-        @page { margin: 26px 30px 58px 30px; }
+        @page { margin: 26px 30px 64px 30px; }
 
         * { box-sizing: border-box; }
 
@@ -72,6 +72,9 @@
         .num { text-align: right; white-space: nowrap; }
         .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 7.5px; }
         .kanal { white-space: nowrap; }
+        /* Footer hak cipta: digambar DomPDF di setiap halaman lewat script,
+           bukan elemen HTML, supaya tidak hanya muncul di halaman terakhir. */
+        .footer-cipta { font-size: 7.2px; color: #94a3b8; }
         .masuk { color: #047857; font-weight: bold; }
         .keluar { color: #b91c1c; font-weight: bold; }
         .biaya { color: #b45309; font-weight: bold; }

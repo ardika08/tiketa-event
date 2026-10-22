@@ -82,10 +82,30 @@ class KeuanganPdfService
         $pdf->loadHtml(view('reports.keuangan-pdf', $data)->render(), 'UTF-8');
         $pdf->render();
 
+        // Footer hak cipta + nomor halaman di SETIAP halaman. Dipasang lewat
+        // callback, bukan <script> di view: DomPDF 3 tidak mengeksekusi tag
+        // script inline, dan string script sudah deprecated.
+        $pdf->getCanvas()->page_script(function (int $halaman, int $total, $canvas, $fontMetrics) {
+            $font = $fontMetrics->getFont('DejaVu Sans', 'normal');
+            $abu = [0.58, 0.64, 0.70];
+
+            $canvas->page_text(30, 812, $this->teksHakCipta(), $font, 7.2, $abu);
+            $canvas->page_text(535, 812, "Halaman {$halaman} dari {$total}", $font, 7.2, $abu);
+        });
+
         $slug = preg_replace('/[^a-z0-9]+/', '-', strtolower($namaOrganizer ?: 'nontix'));
         $namaFile = 'laporan-keuangan-'.trim($slug, '-').'-'.now()->format('Ymd-Hi').'.pdf';
 
         return [$pdf, $namaFile];
+    }
+
+    /**
+     * Teks hak cipta untuk footer PDF. Satu sumber kebenaran — kalau entitas
+     * hukumnya berubah, cukup ubah di sini, bukan di tiap template.
+     */
+    public function teksHakCipta(): string
+    {
+        return '© '.date('Y').' Nontix — PT. DIARMA AKSARA MEDIA. Seluruh hak cipta dilindungi.';
     }
 
     /**

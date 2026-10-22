@@ -148,6 +148,33 @@ class KeuanganPdfTest extends TestCase
     }
 
     /**
+     * Footer hak cipta digambar lewat callback DomPDF, bukan HTML, jadi tidak
+     * akan terlihat dari test HTTP biasa. Yang diuji: teksnya benar, tahunnya
+     * mengikuti tahun berjalan, dan entitas hukumnya persis sama dengan footer
+     * di halaman publik.
+     */
+    public function test_footer_hak_cipta_sesuai_entitas_hukum(): void
+    {
+        $service = app(\App\Services\KeuanganPdfService::class);
+        $teks = $service->teksHakCipta();
+
+        $this->assertSame(
+            '© '.date('Y').' Nontix — PT. DIARMA AKSARA MEDIA. Seluruh hak cipta dilindungi.',
+            $teks,
+        );
+        $this->assertStringContainsString('PT. DIARMA AKSARA MEDIA', $teks);
+        $this->assertStringContainsString('Seluruh hak cipta dilindungi', $teks);
+
+        // Badan PDF tetap terbentuk dan tetap berkas PDF sah.
+        [$user] = $this->skenario();
+        Sanctum::actingAs($user);
+        $respons = $this->get('/api/partner/finance/pdf');
+
+        $respons->assertOk();
+        $this->assertStringStartsWith('%PDF-', $respons->getContent());
+    }
+
+    /**
      * Saldo akhir dihitung lewat service, bukan dibaca dari teks PDF —
      * teks PDF tidak andal untuk asersi angka.
      */

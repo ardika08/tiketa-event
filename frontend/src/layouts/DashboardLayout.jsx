@@ -143,6 +143,13 @@ export default function DashboardLayout({ role = 'partner' }) {
         <main className="p-5 sm:p-8 lg:p-10">
           <Outlet />
         </main>
+        {/* Footer hak cipta: teks sama dengan halaman publik, supaya satu
+            entitas hukum di seluruh produk. Tahun dihitung otomatis. */}
+        <footer className="border-t border-slate-200 px-5 py-5 sm:px-8 lg:px-10">
+          <p className="text-center text-xs text-slate-400">
+            © {new Date().getFullYear()} <span className="font-semibold text-slate-500">Nontix</span> — PT. DIARMA AKSARA MEDIA. Seluruh hak cipta dilindungi.
+          </p>
+        </footer>
       </div>
     </div>
   )
