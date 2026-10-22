@@ -94,11 +94,16 @@ export default function Finance() {
     setUnduhPdf(true)
     setGalatUnduh('')
     try {
+      // Nama dari server diutamakan. Cadangannya tetap nama yang masuk akal,
+      // bukan 'unduhan', supaya berkas tidak pernah tersimpan tanpa keterangan
+      // kalau header tidak terbaca (mis. proxy membuang Content-Disposition).
       const { blob, namaFile } = await partnerApi.financePdf()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = namaFile || 'laporan-keuangan.pdf'
+      a.download = namaFile && namaFile !== 'unduhan'
+        ? namaFile
+        : `Nontix_Laporan-Keuangan_${new Date().toISOString().slice(0, 7)}.pdf`
       document.body.appendChild(a)
       a.click()
       a.remove()

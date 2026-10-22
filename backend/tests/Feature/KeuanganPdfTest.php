@@ -175,6 +175,68 @@ class KeuanganPdfTest extends TestCase
     }
 
     /**
+     * Nama berkas unduhan harus deskriptif dan aman di semua sistem operasi.
+     */
+    public function test_nama_berkas_pdf_profesional_dan_aman(): void
+    {
+        [$user, $organizer] = $this->skenario();
+        $organizer->update(['nama_penyelenggara' => 'Mommils Birthclub']);
+
+        Sanctum::actingAs($user);
+        $respons = $this->get('/api/partner/finance/pdf');
+        $respons->assertOk();
+
+        $disposisi = $respons->headers->get('Content-Disposition');
+        $this->assertStringContainsString('attachment;', $disposisi);
+        $this->assertStringContainsString(
+            'Nontix_Laporan-Keuangan_Mommils-Birthclub_'.now()->format('Y-m').'.pdf',
+            $disposisi,
+        );
+
+        // Tanpa ini, browser menyembunyikan nama berkas pada request lintas
+        // origin dan frontend terpaksa memakai nama generik.
+        $this->assertSame(
+            'Content-Disposition',
+            $respons->headers->get('Access-Control-Expose-Headers'),
+        );
+    }
+
+    /**
+     * Karakter yang haram di nama berkas (Windows) tidak boleh lolos.
+     */
+    public function test_nama_berkas_membuang_karakter_terlarang(): void
+    {
+        [$user, $organizer] = $this->skenario();
+        $organizer->update(['nama_penyelenggara' => 'PT. Diarma / Aksara: Media*?<>|']);
+
+        Sanctum::actingAs($user);
+        $disposisi = $this->get('/api/partner/finance/pdf')->headers->get('Content-Disposition');
+
+        $nama = $this->namaDariDisposisi($disposisi);
+
+        foreach (['/', '\\', ':', '*', '?', '"', '<', '>', '|'] as $haram) {
+            $this->assertStringNotContainsString($haram, $nama, "karakter '{$haram}' tidak boleh ada di nama berkas");
+        }
+        $this->assertStringStartsWith('Nontix_Laporan-Keuangan_', $nama);
+        $this->assertStringEndsWith('.pdf', $nama);
+        $this->assertLessThan(120, strlen($nama));
+    }
+
+    /**
+     * Ambil nama berkas dari header Content-Disposition (utamakan filename*).
+     */
+    private function namaDariDisposisi(string $disposisi): string
+    {
+        if (preg_match("/filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i", $disposisi, $m)) {
+            return rawurldecode(trim($m[1], '"'));
+        }
+
+        preg_match('/filename\s*=\s*"?([^";]+)"?/i', $disposisi, $m);
+
+        return trim($m[1] ?? '');
+    }
+
+    /**
      * Nomor halaman harus muncul SEKALI per halaman dan tidak keluar margin.
      *
      * Regresi yang pernah terjadi: page_script() + callback berisi page_text()

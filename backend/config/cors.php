@@ -27,7 +27,16 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    /*
+    | Header yang boleh DIBACA JavaScript di browser. Default kosong: browser
+    | menyembunyikan semua header non-standar pada respons lintas origin.
+    |
+    | Content-Disposition wajib dibuka supaya frontend bisa memakai nama berkas
+    | yang ditentukan server (mis. laporan keuangan PDF). Tanpa ini, unduhan
+    | selalu bernama 'unduhan.pdf' meskipun server sudah mengirim nama yang benar.
+    */
+    'exposed_headers' => ['Content-Disposition'],
+
 
     'max_age' => 0,
 

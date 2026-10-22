@@ -41,7 +41,17 @@ class ReportController extends PartnerController
 
         return response($berkas->output(), 200, [
             'Content-Type' => 'application/pdf',
-            'Content-Disposition' => 'attachment; filename="'.$namaFile.'"',
+            // filename* (RFC 5987) membawa nama UTF-8 sebenarnya; filename
+            // polos jadi cadangan untuk klien lama. Tanpa keduanya, sebagian
+            // browser memakai nama dari URL (mis. "pdf").
+            'Content-Disposition' => sprintf(
+                'attachment; filename="%s"; filename*=UTF-8\'\'%s',
+                preg_replace('/[^\x20-\x7E]/', '_', $namaFile),
+                rawurlencode($namaFile),
+            ),
+            // Wajib: tanpa ini browser menyembunyikan nama berkas pada request
+            // lintas origin dan frontend hanya bisa memakai nama generik.
+            'Access-Control-Expose-Headers' => 'Content-Disposition',
         ]);
     }
 

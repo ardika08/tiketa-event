@@ -185,9 +185,25 @@ async function unduhBerkas(path, opts = {}) {
   }
 
   // Nama berkas diambil dari header supaya penamaan tetap ditentukan server.
+  //
+  // Urutan penting: filename* (RFC 5987) memuat nama UTF-8 sebenarnya, jadi
+  // harus didahulukan. Header lama hanya punya filename biasa.
+  // Catatan: header ini baru terbaca kalau server mengirim
+  // Access-Control-Expose-Headers pada respons lintas origin.
   const disposisi = res.headers.get('Content-Disposition') || ''
-  const cocok = disposisi.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
-  const namaFile = cocok ? decodeURIComponent(cocok[1].trim()) : 'unduhan'
+  const utf8 = disposisi.match(/filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i)
+  const biasa = disposisi.match(/filename\s*=\s*"?([^";]+)"?/i)
+
+  let namaFile = 'unduhan'
+  if (utf8) {
+    try {
+      namaFile = decodeURIComponent(utf8[1].trim().replace(/^"|"$/g, ''))
+    } catch {
+      /* nama tidak ter-encode — pakai cadangan di bawah */
+    }
+  } else if (biasa) {
+    namaFile = biasa[1].trim()
+  }
 
   return { blob: await res.blob(), namaFile }
 }

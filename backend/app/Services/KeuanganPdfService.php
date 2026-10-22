@@ -116,10 +116,35 @@ class KeuanganPdfService
             $nomor, $font, $ukuran, $abu,
         );
 
-        $slug = preg_replace('/[^a-z0-9]+/', '-', strtolower($namaOrganizer ?: 'nontix'));
-        $namaFile = 'laporan-keuangan-'.trim($slug, '-').'-'.now()->format('Ymd-Hi').'.pdf';
+        return [$pdf, $this->namaBerkas($namaOrganizer)];
+    }
 
-        return [$pdf, $namaFile];
+    /**
+     * Nama berkas unduhan, mis. "Nontix_Laporan-Keuangan_Mommils-Birthclub_2026-10.pdf".
+     *
+     * Aturan penamaan:
+     * - Huruf, angka, dan tanda hubung saja. Spasi jadi tanda hubung, garis
+     *   miring dan karakter aneh dibuang: nama berkas yang mengandung "/" atau
+     *   ":" gagal diunduh di Windows.
+     * - Awalan "Nontix" supaya berkas tetap dikenali setelah dipindah ke folder
+     *   unduhan atau dikirim lewat email.
+     * - Tanpa jam dan menit: laporan bulanan yang diunduh berkali-kali
+     *   sebaiknya menimpa berkas lama, bukan menumpuk jadi banyak salinan.
+     *   Bulan ikut tercantum karena isi laporan bergantung pada data terkini.
+     * - Nama penyelenggara dibatasi ~40 karakter supaya nama berkas tidak
+     *   melebihi batas 255 byte pada sistem berkas.
+     */
+    private function namaBerkas(?string $namaOrganizer): string
+    {
+        $bersih = fn (string $teks, int $maks): string => trim(
+            substr(preg_replace('/[^A-Za-z0-9]+/', '-', $teks), 0, $maks),
+            '-',
+        );
+
+        $penyelenggara = $bersih($namaOrganizer ?: 'Penyelenggara', 40) ?: 'Penyelenggara';
+        $bulan = now()->format('Y-m');
+
+        return "Nontix_Laporan-Keuangan_{$penyelenggara}_{$bulan}.pdf";
     }
 
     /**
