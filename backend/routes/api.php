@@ -132,6 +132,7 @@ Route::middleware(['auth:sanctum', 'sesi.idle'])->group(function () {
         Route::post('/manual-orders', [ManualOrderController::class, 'store'])
             ->middleware('throttle:60,10');
         Route::get('/finance', [PartnerReportController::class, 'finance']);
+        Route::get('/finance/pdf', [PartnerReportController::class, 'financePdf']);
         Route::get('/sales', [PartnerReportController::class, 'sales']);
 
         Route::get('/payouts', [PayoutController::class, 'index']);

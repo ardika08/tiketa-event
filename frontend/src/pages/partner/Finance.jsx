@@ -10,6 +10,8 @@ import { downloadCsv, namaFileCsv } from '../../lib/csv'
 export default function Finance() {
   const [exportOpen, setExportOpen] = useState(false)
   const [done, setDone] = useState(false)
+  const [unduhPdf, setUnduhPdf] = useState(false)
+  const [galatUnduh, setGalatUnduh] = useState('')
   const [payoutOpen, setPayoutOpen] = useState(false)
   const [payoutForm, setPayoutForm] = useState({ jumlah: '', catatan: '' })
   const [payoutError, setPayoutError] = useState('')
@@ -86,6 +88,29 @@ export default function Finance() {
   //
   // Alasannya: laporan keuangan dibaca sebagai aliran uang — masuk, keluar,
   // sisa. Format tabel lebar memaksa orang menjumlah sendiri kolomnya.
+  // PDF dibuat di server (DomPDF): kop, ringkasan, mutasi, riwayat pencairan,
+  // dan nomor halaman. Angkanya bersumber dari endpoint yang sama dengan CSV.
+  const unduhPdfLaporan = async () => {
+    setUnduhPdf(true)
+    setGalatUnduh('')
+    try {
+      const { blob, namaFile } = await partnerApi.financePdf()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = namaFile || 'laporan-keuangan.pdf'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      setDone(true)
+    } catch (err) {
+      setGalatUnduh(err?.message || 'Gagal membuat PDF. Coba lagi.')
+    } finally {
+      setUnduhPdf(false)
+    }
+  }
+
   // Kolom mengikuti laporan balance bank (tanggal, jenis transaksi, referensi,
   // uraian, tipe baris, kanal, nominal, saldo berjalan), disesuaikan dengan
   // istilah di Nontix.
@@ -423,13 +448,16 @@ export default function Finance() {
 
       <Modal
         open={exportOpen}
-        onClose={() => { setExportOpen(false); setDone(false) }}
+        onClose={() => { setExportOpen(false); setDone(false); setGalatUnduh("") }}
         title="Ekspor Laporan Keuangan"
         footer={
           done ? <Button onClick={() => { setExportOpen(false); setDone(false) }}>Selesai</Button> : (
             <>
               <Button variant="secondary" onClick={() => setExportOpen(false)}>Batal</Button>
-              <Button onClick={unduhLaporan}>Unduh CSV</Button>
+              <Button variant="secondary" onClick={unduhLaporan}>Unduh CSV</Button>
+              <Button onClick={unduhPdfLaporan} disabled={unduhPdf}>
+                {unduhPdf ? 'Menyiapkan PDF…' : 'Unduh PDF'}
+              </Button>
             </>
           )
         }
@@ -443,15 +471,27 @@ export default function Finance() {
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-slate-600">
-              File CSV berbentuk mutasi: satu baris untuk setiap kejadian uang, lengkap dengan saldo berjalan.
-              Berisi {transaksi.length} penjualan lunas dan {riwayatPayout.length} pencairan.
+              Kedua format berisi data yang sama: <span className="font-semibold">mutasi keuangan</span> dengan
+              saldo berjalan, dari {transaksi.length} penjualan lunas dan {riwayatPayout.length} pencairan.
             </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 px-3 py-2">
+                <p className="text-sm font-semibold text-slate-800">CSV</p>
+                <p className="text-xs text-slate-500">Untuk Excel atau Google Sheets. Bisa diolah dan dijumlah ulang sendiri.</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 px-3 py-2">
+                <p className="text-sm font-semibold text-slate-800">PDF</p>
+                <p className="text-xs text-slate-500">Siap cetak atau dikirim: berkop, ringkasan, dan nomor halaman.</p>
+              </div>
+            </div>
             <ul className="space-y-1 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
               <li>• <span className="font-semibold">Mutasi</span> — tanggal, jenis transaksi, referensi, uraian, tipe baris, kanal, nominal, dan saldo berjalan.</li>
               <li>• Tiap penjualan menghasilkan dua baris: uang masuk dan biaya layanan, sehingga saldo akhirnya jelas.</li>
               <li>• <span className="font-semibold">Ringkasan</span> — total tiket, penjualan bruto, biaya layanan, pencairan, dan saldo akhir.</li>
               <li>• <span className="font-semibold">Ringkasan per event</span> — tiket terjual, bruto, biaya, netto.</li>
+              <li>• Hanya pada PDF: <span className="font-semibold">riwayat pencairan</span> beserta status dan catatan admin.</li>
             </ul>
+            {galatUnduh && <p className="text-sm font-medium text-rose-600">{galatUnduh}</p>}
           </div>
         )}
       </Modal>

@@ -153,8 +153,48 @@ async function upload(path, file, extra = {}, auth = true) {
   return data
 }
 
+// ── Unduh berkas (PDF/CSV) ──────────────────────────────────────────────────
+// Tidak memakai request() karena balasannya biner, bukan JSON. Tetap memakai
+// token yang sama supaya sesi berakhir tertangani seperti request lain.
+// Mengembalikan { blob, namaFile } — pemanggil yang memutuskan cara menyimpan.
+async function unduhBerkas(path, opts = {}) {
+  const auth = opts.auth !== false
+  const headers = { Accept: 'application/pdf, text/csv, */*' }
+  if (auth && token) headers.Authorization = `Bearer ${token}`
+
+  let res
+  try {
+    res = await fetch(`${BASE}${path}`, { headers })
+  } catch {
+    throw new ApiError('Tidak dapat terhubung ke server.', 0, null)
+  }
+
+  if (!res.ok) {
+    // Galat tetap dikirim server sebagai JSON, bukan sebagai berkas.
+    let pesan = 'Gagal mengunduh berkas.'
+    let code = null
+    try {
+      const data = await res.json()
+      pesan = data?.message || pesan
+      code = data?.code || null
+    } catch {
+      /* balasan bukan JSON — pakai pesan bawaan */
+    }
+    if (res.status === 401 && auth && token) tanganiSesiBerakhir(code)
+    throw new ApiError(pesan, res.status, null, code)
+  }
+
+  // Nama berkas diambil dari header supaya penamaan tetap ditentukan server.
+  const disposisi = res.headers.get('Content-Disposition') || ''
+  const cocok = disposisi.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
+  const namaFile = cocok ? decodeURIComponent(cocok[1].trim()) : 'unduhan'
+
+  return { blob: await res.blob(), namaFile }
+}
+
 export const api = {
   get: (path, opts) => request(path, { ...opts }),
+  unduh: (path, opts) => unduhBerkas(path, opts),
   post: (path, body, opts) => request(path, { method: 'POST', body, ...opts }),
   put: (path, body, opts) => request(path, { method: 'PUT', body, ...opts }),
   delete: (path, opts) => request(path, { method: 'DELETE', ...opts }),
@@ -233,6 +273,8 @@ export const partnerApi = {
   // Penjualan manual (OTS/tunai/transfer): langsung lunas + QR + email.
   buatOrderManual: (payload) => api.post('/partner/manual-orders', payload),
   finance: () => api.get('/partner/finance'),
+  /** Laporan keuangan PDF — mengembalikan { blob, namaFile }. */
+  financePdf: () => api.unduh('/partner/finance/pdf'),
   sales: () => api.get('/partner/sales'),
 
   payouts: () => api.get('/partner/payouts'),
