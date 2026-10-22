@@ -237,6 +237,12 @@ class ReportService
                 'bruto' => (float) $order->total_harga,
                 'biaya_layanan' => (float) $order->biaya_layanan,
                 'netto' => (float) $order->total_harga - (float) $order->biaya_layanan,
+                // Kolom laporan bergaya mutasi bank: pembeli, sumber, metode.
+                'nama_pembeli' => $order->nama_pembeli,
+                'email' => $order->email,
+                'sumber' => $order->sumber ?: Order::SUMBER_ONLINE,
+                'metode_bayar' => $order->metode_bayar,
+                'jenis' => $order->isManual() ? 'penjualan_manual' : 'penjualan_online',
             ])
             ->all();
 

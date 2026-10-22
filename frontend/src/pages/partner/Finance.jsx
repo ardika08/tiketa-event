@@ -16,6 +16,10 @@ export default function Finance() {
   const [saving, setSaving] = useState(false)
 
   const { data, loading, reload } = useApi(() => partnerApi.finance(), [])
+  // Nama penyelenggara untuk judul di file ekspor — bukan data keuangan, tapi
+  // file laporan tanpa identitas pemilik sulit diarsipkan/diaudit.
+  const { data: profilData } = useApi(() => partnerApi.profile(), [])
+  const namaOrganizer = profilData?.data?.nama_penyelenggara || profilData?.data?.nama || ''
   const summaryRaw = data?.summary || {}
   const transaksi = data?.transaksi || []
   const payout = data?.payout || {}
@@ -78,25 +82,115 @@ export default function Finance() {
     }
   }
 
-  // Ekspor CSV asli dari data yang sudah tampil di halaman ini.
+  // Ekspor CSV berbentuk MUTASI (satu baris = satu kejadian), bukan tabel lebar.
+  //
+  // Alasannya: laporan keuangan dibaca sebagai aliran uang — masuk, keluar,
+  // sisa. Format tabel lebar memaksa orang menjumlah sendiri kolomnya.
+  // Kolom mengikuti laporan balance bank (tanggal, jenis transaksi, referensi,
+  // uraian, tipe baris, kanal, nominal, saldo berjalan), disesuaikan dengan
+  // istilah di Nontix.
   const unduhLaporan = () => {
+    const baris = []
+
+    // Urutkan kronologis (lama → baru) supaya saldo berjalan bisa dihitung.
+    const kronologis = [...transaksi].sort(
+      (a, b) => new Date(a.tanggal || 0) - new Date(b.tanggal || 0),
+    )
+
+    const angka = (n) => Number(n || 0)
+    const tgl = (iso) => (iso ? formatTanggal(iso, { withTime: true }) : '')
+    const kanal = (t) => {
+      if (t.sumber === 'manual' || t.jenis === 'penjualan_manual') {
+        const m = t.metode_bayar
+        if (m === 'tunai') return 'TUNAI'
+        if (m === 'transfer') return 'TRANSFER'
+        if (m === 'bayar_di_lokasi') return 'BAYAR DI LOKASI'
+        return 'MANUAL'
+      }
+      return 'MAYAR'
+    }
+
+    let saldo = 0
+    let totalBruto = 0
+    let totalBiaya = 0
+    let totalPayout = 0
+    let totalTiket = 0
+
+    for (const t of kronologis) {
+      const bruto = angka(t.bruto)
+      const biaya = angka(t.biaya_layanan)
+      const netto = angka(t.netto)
+      const pembeli = t.nama_pembeli || '—'
+
+      // 1) Uang masuk: nilai tiket yang dibayar pembeli.
+      saldo += bruto
+      totalBruto += bruto
+      totalTiket += angka(t.jumlah_tiket)
+      baris.push([
+        tgl(t.tanggal), 'PENJUALAN TIKET', t.kode_order, `${pembeli} — ${t.event}, ${t.jumlah_tiket} tiket`,
+        'MASUK', kanal(t), bruto, saldo,
+      ])
+
+      // 2) Biaya layanan: potongan platform per tiket.
+      if (biaya > 0) {
+        saldo -= biaya
+        totalBiaya += biaya
+        baris.push([
+          tgl(t.tanggal), 'BIAYA LAYANAN', t.kode_order, `Biaya platform ${formatRupiah(biaya)} (${t.jumlah_tiket} tiket x ${formatRupiah(BIAYA_LAYANAN)})`,
+          'BIAYA', kanal(t), -biaya, saldo,
+        ])
+      }
+
+      // Jejak netto per pesanan: memudahkan rekonsiliasi satu pesanan.
+      if (Math.round(netto) !== Math.round(bruto - biaya)) {
+        baris.push([
+          tgl(t.tanggal), 'SELISIH NETTO', t.kode_order, 'Netto tidak sama dengan bruto dikurangi biaya — periksa pesanan ini',
+          'CATATAN', kanal(t), 0, saldo,
+        ])
+      }
+    }
+
+    // 3) Pencairan: uang keluar dari saldo platform ke rekening partner.
+    for (const p of riwayatPayout) {
+      const jumlah = angka(p.jumlah)
+      const status = p.status === 'selesai' ? 'SELESAI' : p.status === 'ditolak' ? 'DITOLAK' : 'DIPROSES'
+      if (status === 'DITOLAK') continue
+      saldo -= jumlah
+      totalPayout += jumlah
+      baris.push([
+        tgl(p.diajukan_at || p.selesai_at),
+        'PENCAIRAN DANA',
+        `PAYOUT-${p.id}`,
+        `Transfer ke ${p.nama_bank || '—'} ${p.nomor_rekening || ''} a/n ${p.nama_rekening || '—'} (${status})`,
+        'KELUAR',
+        'TRANSFER BANK',
+        -jumlah,
+        saldo,
+      ])
+    }
+
+    baris.sort((a, b) => new Date(a[0] || 0) - new Date(b[0] || 0) || 0)
+
     const rows = [
-      ['RINGKASAN PER EVENT'],
-      ['Event', 'Tiket Terjual', 'Pendapatan Kotor', 'Biaya Layanan', 'Pendapatan Bersih'],
-      ...perEvent.map((e) => [e.event, e.tiket, e.kotor, e.biaya, e.bersih]),
-      ['TOTAL', summary.tiket, summary.kotor, summary.biaya, summary.bersih],
+      [`LAPORAN KEUANGAN — ${namaOrganizer || 'Nontix'}`],
+      [`Dibuat: ${formatTanggal(new Date().toISOString(), { withTime: true })}`],
+      ['Saldo awal', 0],
+      ['Saldo akhir (netto tersedia)', Math.round(saldo)],
       [],
-      ['RINCIAN TRANSAKSI LUNAS'],
-      ['Kode Pesanan', 'Tanggal Lunas', 'Event', 'Jumlah Tiket', 'Bruto', 'Biaya Layanan', 'Netto'],
-      ...transaksi.map((t) => [
-        t.kode_order,
-        t.tanggal ? formatTanggal(t.tanggal, { withTime: true }) : '',
-        t.event,
-        t.jumlah_tiket,
-        t.bruto,
-        t.biaya_layanan,
-        t.netto,
-      ]),
+      ['Tanggal & Waktu', 'Jenis Transaksi', 'Referensi', 'Uraian', 'Tipe Baris', 'Kanal', 'Nominal (Rp)', 'Saldo (Rp)'],
+      ...baris.map((r) => [r[0], r[1], r[2], r[3], r[4], r[5], Math.round(r[6]), Math.round(r[7])]),
+      [],
+      ['RINGKASAN'],
+      ['Total tiket terjual', totalTiket],
+      ['Total penjualan (bruto)', Math.round(totalBruto)],
+      ['Total biaya layanan', -Math.round(totalBiaya)],
+      ['Total pencairan', -Math.round(totalPayout)],
+      ['Saldo akhir', Math.round(totalBruto - totalBiaya - totalPayout)],
+      [],
+      ['RINGKASAN PER EVENT'],
+      ['Event', 'Tiket Terjual', 'Penjualan Bruto (Rp)', 'Biaya Layanan (Rp)', 'Netto (Rp)'],
+      ...perEvent.map((e) => [e.event, e.tiket, Math.round(e.kotor), Math.round(e.biaya), Math.round(e.bersih)]),
+      ['TOTAL', summary.tiket, Math.round(summary.kotor), Math.round(summary.biaya), Math.round(summary.bersih)],
     ]
     downloadCsv(namaFileCsv('laporan-keuangan'), rows)
     setDone(true)
@@ -349,11 +443,14 @@ export default function Finance() {
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-slate-600">
-              File CSV berisi data yang tampil di halaman ini: ringkasan per event dan rincian {transaksi.length} transaksi lunas.
+              File CSV berbentuk mutasi: satu baris untuk setiap kejadian uang, lengkap dengan saldo berjalan.
+              Berisi {transaksi.length} penjualan lunas dan {riwayatPayout.length} pencairan.
             </p>
             <ul className="space-y-1 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
-              <li>• Ringkasan per event — tiket terjual, pendapatan kotor, biaya layanan, pendapatan bersih.</li>
-              <li>• Rincian transaksi lunas — kode pesanan, tanggal, jumlah tiket, bruto, biaya, netto.</li>
+              <li>• <span className="font-semibold">Mutasi</span> — tanggal, jenis transaksi, referensi, uraian, tipe baris, kanal, nominal, dan saldo berjalan.</li>
+              <li>• Tiap penjualan menghasilkan dua baris: uang masuk dan biaya layanan, sehingga saldo akhirnya jelas.</li>
+              <li>• <span className="font-semibold">Ringkasan</span> — total tiket, penjualan bruto, biaya layanan, pencairan, dan saldo akhir.</li>
+              <li>• <span className="font-semibold">Ringkasan per event</span> — tiket terjual, bruto, biaya, netto.</li>
             </ul>
           </div>
         )}
