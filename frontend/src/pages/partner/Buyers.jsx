@@ -118,6 +118,9 @@ export default function Buyers() {
   const [manualSaving, setManualSaving] = useState(false)
   const [manualHasil, setManualHasil] = useState(null)
 
+  // Filter sumber penjualan: online (pembeli isi sendiri) vs manual (partner input).
+  const [sumber, setSumber] = useState('all')
+
   const { data, loading, reload } = useApi(() => partnerApi.buyers(), [])
   const { data: eventsData } = useApi(() => partnerApi.events(), [])
   const buyers = data?.data || []
@@ -128,9 +131,17 @@ export default function Buyers() {
       const matchQ = b.nama.toLowerCase().includes(q.toLowerCase()) || b.email.toLowerCase().includes(q.toLowerCase())
       const matchE = eventName === 'all' || b.event === eventName
       const matchS = status === 'all' || b.status === status
-      return matchQ && matchE && matchS
+      // Order lama (sebelum kolom sumber ada) dianggap online — itu jalur aslinya.
+      const asal = b.sumber || 'online'
+      const matchSm = sumber === 'all' || asal === sumber
+      return matchQ && matchE && matchS && matchSm
     })
-  }, [buyers, q, eventName, status])
+  }, [buyers, q, eventName, status, sumber])
+
+  const jumlahManual = useMemo(
+    () => buyers.filter((b) => (b.sumber || 'online') === 'manual').length,
+    [buyers],
+  )
 
   const jumlahLunas = useMemo(() => buyers.filter((b) => b.status === 'lunas').length, [buyers])
 
@@ -273,7 +284,7 @@ export default function Buyers() {
     <div>
       <PageHeader
         title="Data Pembeli"
-        description={`Semua pesanan tiket beserta kontaknya. ${jumlahLunas} dari ${buyers.length} sudah lunas. Klik baris untuk melihat jawaban formulir.`}
+        description={`Semua pesanan tiket beserta kontaknya. ${jumlahLunas} dari ${buyers.length} sudah lunas${jumlahManual > 0 ? `, ${jumlahManual} di antaranya penjualan manual` : ''}. Klik baris untuk melihat jawaban formulir.`}
         action={
           <>
             <Button onClick={bukaManual}>
@@ -312,6 +323,11 @@ export default function Buyers() {
             <option value="all">Semua Event</option>
             {events.map((e) => <option key={e.id} value={e.nama_event}>{e.nama_event}</option>)}
           </Select>
+          <Select value={sumber} onChange={(e) => { setSumber(e.target.value); setPage(1) }} className="sm:w-52">
+            <option value="all">Semua Sumber</option>
+            <option value="online">Online (isi sendiri)</option>
+            <option value="manual">Manual (input partner)</option>
+          </Select>
         </div>
       </Card>
 
@@ -319,7 +335,13 @@ export default function Buyers() {
         {loading ? (
           <div className="m-4 h-56 animate-pulse rounded-xl bg-slate-100" />
         ) : rows.length === 0 ? (
-          <EmptyState icon={Users} title="Tidak ada pembeli" description="Coba ubah kata kunci atau filter event." />
+          <EmptyState
+            icon={Users}
+            title="Tidak ada pembeli"
+            description={sumber === 'manual'
+              ? 'Belum ada penjualan manual. Pakai tombol "Jual Tiket Manual" untuk mencatat penjualan di luar website.'
+              : 'Coba ubah kata kunci atau filter event.'}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[820px] text-sm">
