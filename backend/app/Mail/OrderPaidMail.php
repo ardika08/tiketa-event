@@ -17,9 +17,14 @@ class OrderPaidMail extends Mailable
 
     public function build(): self
     {
+        // Order manual tidak pernah lewat gateway: subjek dan isinya tidak boleh
+        // mengklaim "Pembayaran Berhasil" / "Invoice". Pembeli membayar tunai
+        // atau transfer ke panitia, jadi yang dikirim adalah e-ticket saja.
+        $manual = ! $this->order->lunasLewatGateway();
+
         return $this
-            ->subject('Invoice & E-Ticket '.$this->order->kode_order.' — Nontix')
-            ->view('emails.order-paid')
+            ->subject(($manual ? 'E-Ticket ' : 'Invoice & E-Ticket ').$this->order->kode_order.' — Nontix')
+            ->view($manual ? 'emails.ticket-manual' : 'emails.order-paid')
             ->with([
                 'order' => $this->order,
                 'frontendUrl' => rtrim((string) config('nontix.frontend_url'), '/'),

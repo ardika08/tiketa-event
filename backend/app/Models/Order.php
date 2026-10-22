@@ -109,6 +109,33 @@ class Order extends Model
         return $this->sumber === self::SUMBER_MANUAL;
     }
 
+    /**
+     * Satu-satunya asal-usul status "lunas".
+     *
+     * Order online lunas lewat webhook gateway (ada baris payments provider
+     * mayar). Order manual tidak punya itu — yang menentukan adalah penjualan
+     * manual yang dicatat partner. Dipakai untuk memilih template email supaya
+     * pembeli manual tidak menerima klaim "Pembayaran Berhasil" padahal uangnya
+     * dibayar tunai/transfer ke panitia.
+     */
+    public function lunasLewatGateway(): bool
+    {
+        if ($this->isManual()) {
+            return false;
+        }
+
+        // Kalau ada baris pembayaran manual di order non-manual, itu penanda
+        // eksplisit bahwa uangnya tidak lewat gateway.
+        if ($this->payments()->where('provider', 'manual')->exists()) {
+            return false;
+        }
+
+        // Selain itu, order lunas non-manual selalu lahir dari webhook gateway.
+        // Tidak mensyaratkan baris payments "berhasil" karena pembayaran yang
+        // dicatat lewat jalur simulasi/rekonsiliasi tetap pesanan online.
+        return true;
+    }
+
     /** Partner yang menginput order manual. */
     public function pembuat(): BelongsTo
     {

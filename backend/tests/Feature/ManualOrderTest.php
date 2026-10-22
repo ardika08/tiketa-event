@@ -202,4 +202,50 @@ class ManualOrderTest extends TestCase
         ])->assertStatus(422)
             ->assertJsonValidationErrors(['email', 'metode_bayar']);
     }
+
+    public function test_email_manual_tidak_mengklaim_pembayaran_berhasil(): void
+    {
+        [$user, $event, $kategori] = $this->skenario();
+
+        Sanctum::actingAs($user);
+
+        $respon = $this->postJson('/api/partner/manual-orders', $this->payloadManual($event, $kategori))->assertCreated();
+        $order = Order::where('kode_order', $respon->json('data.kode_order'))->firstOrFail();
+
+        $service = app(\App\Services\OrderService::class);
+        $mail = new \App\Mail\OrderPaidMail($order->fresh($service->relations()));
+        $mail->build();
+
+        // Subjek jujur: bukan invoice, karena tidak ada tagihan gateway.
+        $this->assertStringStartsWith('E-Ticket '.$order->kode_order, $mail->subject);
+        $this->assertStringNotContainsString('Invoice', $mail->subject);
+
+        $html = $mail->render();
+        $kodeQr = \App\Models\TicketPass::whereIn('ticket_id', $order->tickets()->pluck('id'))->first()->kode_qr;
+
+        // Isi: e-ticket + QR benar-benar ada, tanpa klaim pembayaran gateway.
+        $this->assertStringContainsString($kodeQr, $html);
+        $this->assertStringNotContainsString('Pembayaran Berhasil', $html);
+        $this->assertStringContainsString('diterima langsung oleh panitia', $html);
+    }
+
+    public function test_email_online_tetap_memakai_template_invoice(): void
+    {
+        [$user, $event, $kategori] = $this->skenario();
+
+        $service = app(\App\Services\OrderService::class);
+        $order = $service->create(
+            $event,
+            ['nama' => 'Pembeli Online', 'email' => 'online@mail.com', 'whatsapp' => '081211112222'],
+            [['ticket_type_id' => $kategori->id, 'jumlah' => 1]],
+        );
+        $service->markPaid($order, null, 'qris');
+        $order = $order->fresh($service->relations());
+
+        $mail = new \App\Mail\OrderPaidMail($order);
+        $mail->build();
+
+        $this->assertStringStartsWith('Invoice & E-Ticket', $mail->subject);
+        $this->assertStringContainsString('Pembayaran Berhasil', $mail->render());
+    }
 }
