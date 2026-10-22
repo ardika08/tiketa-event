@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Partner;
 
+use App\Services\PembeliPdfService;
 use App\Services\ReportService;
 use App\Services\KeuanganPdfService;
 use Illuminate\Http\Request;
@@ -44,6 +45,31 @@ class ReportController extends PartnerController
             // filename* (RFC 5987) membawa nama UTF-8 sebenarnya; filename
             // polos jadi cadangan untuk klien lama. Tanpa keduanya, sebagian
             // browser memakai nama dari URL (mis. "pdf").
+            'Content-Disposition' => sprintf(
+                'attachment; filename="%s"; filename*=UTF-8\'\'%s',
+                preg_replace('/[^\x20-\x7E]/', '_', $namaFile),
+                rawurlencode($namaFile),
+            ),
+            // Wajib: tanpa ini browser menyembunyikan nama berkas pada request
+            // lintas origin dan frontend hanya bisa memakai nama generik.
+            'Access-Control-Expose-Headers' => 'Content-Disposition',
+        ]);
+    }
+
+    /**
+     * Unduh laporan data pembeli sebagai PDF.
+     *
+     * Endpoint terpisah dari /buyers karena responsnya berkas biner, bukan
+     * JSON — kontrak API-nya berbeda dan tidak bisa digabung dengan tabel.
+     */
+    public function buyersPdf(Request $request, PembeliPdfService $pdf)
+    {
+        [$berkas, $namaFile] = $pdf->buat($this->organizerId($request));
+
+        return response($berkas->output(), 200, [
+            'Content-Type' => 'application/pdf',
+            // filename* (RFC 5987) membawa nama UTF-8 sebenarnya; filename
+            // polos jadi cadangan untuk klien lama.
             'Content-Disposition' => sprintf(
                 'attachment; filename="%s"; filename*=UTF-8\'\'%s',
                 preg_replace('/[^\x20-\x7E]/', '_', $namaFile),

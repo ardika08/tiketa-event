@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react'
-import { Search, Download, Send, Loader2, CheckCircle2, AlertCircle, Users, ChevronLeft, ChevronRight, ChevronDown, Mail, History, Plus } from 'lucide-react'
+import { Search, Download, Send, Loader2, CheckCircle2, AlertCircle, Users, ChevronLeft, ChevronRight, ChevronDown, Mail, History, Plus, FileText } from 'lucide-react'
 import { Button, Card, Input, PageHeader, Select, StatusBadge, EmptyState, Modal, Field } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
@@ -105,6 +105,8 @@ export default function Buyers() {
   const [emailKonfirmasi, setEmailKonfirmasi] = useState(false)
   const [emailError, setEmailError] = useState('')
   const [emailSending, setEmailSending] = useState(false)
+  // Status unduh laporan PDF: mencegah klik ganda saat server menyusun dokumen.
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   // Riwayat pengiriman email satu pesanan.
   const [riwayatModal, setRiwayatModal] = useState(null)
@@ -281,6 +283,28 @@ export default function Buyers() {
     downloadCsv(namaFileCsv('data-pembeli'), [header, ...body])
   }
 
+  // Unduh laporan PDF. Isinya disusun server (bukan dari baris di layar),
+  // supaya laporan resmi tidak ikut terpotong filter atau paginasi.
+  async function unduhPdf() {
+    setPdfLoading(true)
+    setNotif(null)
+    try {
+      const { blob, namaFile } = await partnerApi.buyersPdf()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = namaFile || 'Nontix_Laporan-Pembeli.pdf'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setNotif({ ok: false, text: err.message || 'Gagal membuat laporan PDF.' })
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -292,7 +316,11 @@ export default function Buyers() {
               <Plus size={16} /> Jual Tiket Manual
             </Button>
             <Button variant="secondary" onClick={ekspor} disabled={filtered.length === 0}>
-              <Download size={16} /> Ekspor
+              <Download size={16} /> Ekspor CSV
+            </Button>
+            <Button variant="secondary" onClick={unduhPdf} disabled={pdfLoading || buyers.length === 0}>
+              {pdfLoading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+              {pdfLoading ? 'Menyiapkan…' : 'Unduh PDF'}
             </Button>
           </>
         }

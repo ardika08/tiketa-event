@@ -291,6 +291,8 @@ export const partnerApi = {
   finance: () => api.get('/partner/finance'),
   /** Laporan keuangan PDF — mengembalikan { blob, namaFile }. */
   financePdf: () => api.unduh('/partner/finance/pdf'),
+  // Laporan data pembeli: berkas PDF, bukan JSON — memakai jalur unduh yang sama.
+  buyersPdf: () => api.unduh('/partner/buyers/pdf'),
   sales: () => api.get('/partner/sales'),
 
   payouts: () => api.get('/partner/payouts'),

@@ -118,6 +118,8 @@ Route::middleware(['auth:sanctum', 'sesi.idle'])->group(function () {
 
         Route::get('/analytics', [PartnerReportController::class, 'analytics']);
         Route::get('/buyers', [PartnerReportController::class, 'buyers']);
+        // Berkas biner, bukan JSON — endpoint terpisah agar kontraknya jelas.
+        Route::get('/buyers/pdf', [PartnerReportController::class, 'buyersPdf']);
         // Kirim ulang e-ticket oleh partner (tombol di /partner/pembeli).
         // Dibatasi 20x / 10 menit: cukup untuk membantu beberapa pembeli
         // sekaligus, tetapi mencegah klik berulang yang tak sengaja.
