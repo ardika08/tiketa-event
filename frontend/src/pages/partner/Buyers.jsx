@@ -118,9 +118,6 @@ export default function Buyers() {
   const [manualSaving, setManualSaving] = useState(false)
   const [manualHasil, setManualHasil] = useState(null)
 
-  // Filter sumber penjualan: online (pembeli isi sendiri) vs manual (partner input).
-  const [sumber, setSumber] = useState('all')
-
   const { data, loading, reload } = useApi(() => partnerApi.buyers(), [])
   const { data: eventsData } = useApi(() => partnerApi.events(), [])
   const buyers = data?.data || []
@@ -130,13 +127,17 @@ export default function Buyers() {
     return buyers.filter((b) => {
       const matchQ = b.nama.toLowerCase().includes(q.toLowerCase()) || b.email.toLowerCase().includes(q.toLowerCase())
       const matchE = eventName === 'all' || b.event === eventName
-      const matchS = status === 'all' || b.status === status
+      // "Manual" adalah opsi di dropdown status: menampilkan semua pesanan yang
+      // diinput partner (OTS/tunai/transfer), apa pun status bayarnya.
       // Order lama (sebelum kolom sumber ada) dianggap online — itu jalur aslinya.
-      const asal = b.sumber || 'online'
-      const matchSm = sumber === 'all' || asal === sumber
-      return matchQ && matchE && matchS && matchSm
+      const matchS = status === 'all'
+        ? true
+        : status === 'manual'
+          ? (b.sumber || 'online') === 'manual'
+          : b.status === status
+      return matchQ && matchE && matchS
     })
-  }, [buyers, q, eventName, status, sumber])
+  }, [buyers, q, eventName, status])
 
   const jumlahManual = useMemo(
     () => buyers.filter((b) => (b.sumber || 'online') === 'manual').length,
@@ -315,6 +316,7 @@ export default function Buyers() {
           <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} className="sm:w-48">
             <option value="all">Semua Status</option>
             <option value="lunas">Lunas</option>
+            <option value="manual">Manual</option>
             <option value="pending">Menunggu Pembayaran</option>
             <option value="dibatalkan">Dibatalkan</option>
             <option value="kadaluarsa">Kadaluarsa</option>
@@ -322,11 +324,6 @@ export default function Buyers() {
           <Select value={eventName} onChange={(e) => { setEventName(e.target.value); setPage(1) }} className="sm:w-64">
             <option value="all">Semua Event</option>
             {events.map((e) => <option key={e.id} value={e.nama_event}>{e.nama_event}</option>)}
-          </Select>
-          <Select value={sumber} onChange={(e) => { setSumber(e.target.value); setPage(1) }} className="sm:w-52">
-            <option value="all">Semua Sumber</option>
-            <option value="online">Online (isi sendiri)</option>
-            <option value="manual">Manual (input partner)</option>
           </Select>
         </div>
       </Card>
@@ -338,7 +335,7 @@ export default function Buyers() {
           <EmptyState
             icon={Users}
             title="Tidak ada pembeli"
-            description={sumber === 'manual'
+            description={status === 'manual'
               ? 'Belum ada penjualan manual. Pakai tombol "Jual Tiket Manual" untuk mencatat penjualan di luar website.'
               : 'Coba ubah kata kunci atau filter event.'}
           />
