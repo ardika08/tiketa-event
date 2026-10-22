@@ -82,16 +82,39 @@ class KeuanganPdfService
         $pdf->loadHtml(view('reports.keuangan-pdf', $data)->render(), 'UTF-8');
         $pdf->render();
 
-        // Footer hak cipta + nomor halaman di SETIAP halaman. Dipasang lewat
-        // callback, bukan <script> di view: DomPDF 3 tidak mengeksekusi tag
-        // script inline, dan string script sudah deprecated.
-        $pdf->getCanvas()->page_script(function (int $halaman, int $total, $canvas, $fontMetrics) {
-            $font = $fontMetrics->getFont('DejaVu Sans', 'normal');
-            $abu = [0.58, 0.64, 0.70];
+        // Footer hak cipta + nomor halaman di SETIAP halaman.
+        //
+        // PENTING: pakai page_text(), bukan page_script() dengan callback yang
+        // memanggil page_text() di dalamnya. processPageScript() menelusuri
+        // SEMUA halaman untuk tiap script, jadi callback bertingkat menggambar
+        // seluruh nomor halaman (1..N) di setiap halaman — bertumpuk di satu
+        // titik dan tampak sebagai kotak gelap/blob.
+        //
+        // page_text() juga sudah mengganti {PAGE_NUM}/{PAGE_COUNT} sendiri,
+        // jadi nomornya benar per halaman tanpa hitung manual.
+        //
+        // Posisi kanan dihitung dari lebar halaman, bukan koordinat tetap,
+        // supaya tidak terpotong saat jumlah halaman dua digit.
+        $fontMetrics = $pdf->getFontMetrics();
+        $font = $fontMetrics->getFont('DejaVu Sans', 'normal');
+        $ukuran = 8.5;
+        $abu = [0.58, 0.64, 0.70];
+        $margin = 30.0;
+        $y = 810.0;
 
-            $canvas->page_text(30, 812, $this->teksHakCipta(), $font, 7.2, $abu);
-            $canvas->page_text(535, 812, "Halaman {$halaman} dari {$total}", $font, 7.2, $abu);
-        });
+        $pdf->getCanvas()->page_text($margin, $y, $this->teksHakCipta(), $font, $ukuran, $abu);
+
+        // Lebar diukur dengan angka 2 digit sebagai perkiraan terburuk, supaya
+        // posisi kanan tidak bergeser saat jumlah halaman berubah.
+        $nomor = 'Halaman {PAGE_NUM} dari {PAGE_COUNT}';
+        $lebarNomor = $fontMetrics->getTextWidth(
+            str_replace(['{PAGE_NUM}', '{PAGE_COUNT}'], ['88', '88'], $nomor),
+            $font, $ukuran,
+        );
+        $pdf->getCanvas()->page_text(
+            $pdf->getCanvas()->get_width() - $margin - $lebarNomor, $y,
+            $nomor, $font, $ukuran, $abu,
+        );
 
         $slug = preg_replace('/[^a-z0-9]+/', '-', strtolower($namaOrganizer ?: 'nontix'));
         $namaFile = 'laporan-keuangan-'.trim($slug, '-').'-'.now()->format('Ymd-Hi').'.pdf';

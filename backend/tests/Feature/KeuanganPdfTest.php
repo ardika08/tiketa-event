@@ -175,6 +175,132 @@ class KeuanganPdfTest extends TestCase
     }
 
     /**
+     * Nomor halaman harus muncul SEKALI per halaman dan tidak keluar margin.
+     *
+     * Regresi yang pernah terjadi: page_script() + callback berisi page_text()
+     * menggambar nomor 1..N di SETIAP halaman, bertumpuk di satu titik sampai
+     * tampak seperti kotak hitam. Juga posisi x tetap membuat teks meluber
+     * keluar halaman saat jumlah halaman dua digit.
+     */
+    public function test_nomor_halaman_sekali_per_halaman_dan_di_dalam_margin(): void
+    {
+        [$user] = $this->skenario();
+
+        for ($i = 1; $i <= 25; $i++) {
+            Order::create([
+                'kode_order' => 'NTX-UJI'.str_pad((string) $i, 3, '0', STR_PAD_LEFT),
+                'event_id' => Event::first()->id,
+                'user_id' => null,
+                'nama_pembeli' => 'Pembeli '.$i,
+                'email' => "p{$i}@mail.com",
+                'whatsapp' => '081200000'.str_pad((string) $i, 2, '0'),
+                'total' => 99000,
+                'biaya_layanan' => 2000,
+                'status' => OrderStatus::PAID,
+                'sumber' => 'manual',
+                'created_at' => now()->subDays($i),
+            ]);
+        }
+
+        Sanctum::actingAs($user);
+        $respons = $this->get('/api/partner/finance/pdf');
+        $respons->assertOk();
+
+        $teks = $this->teksPdf($respons->getContent());
+
+        $this->assertGreaterThanOrEqual(2, $teks['halaman'], 'laporan harus lebih dari satu halaman');
+
+        for ($h = 1; $h <= $teks['halaman']; $h++) {
+            $nomor = array_filter(
+                $teks['perHalaman'][$h],
+                fn (string $t) => preg_match('/Halaman \d+ dari \d+/', $t) === 1,
+            );
+
+            $this->assertCount(
+                1, $nomor,
+                "halaman {$h} harus punya tepat satu nomor halaman, bukan ".count($nomor),
+            );
+            $this->assertStringContainsString("Halaman {$h} dari", reset($nomor));
+        }
+
+        $this->assertLessThanOrEqual(
+            $teks['lebar'] - 25,
+            $teks['x1Terbesar'],
+            'nomor halaman tidak boleh melewati margin kanan',
+        );
+    }
+
+    /**
+     * Baca ulang PDF hasil render untuk memeriksa teks per halaman.
+     * Dipakai test — bukan untuk produksi.
+     *
+     * @return array{halaman: int, perHalaman: array<int, array<int, string>>, x1Terbesar: float, lebar: float}
+     */
+    private function teksPdf(string $biner): array
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'pdf').'.pdf';
+        file_put_contents($tmp, $biner);
+
+        $hasil = ['halaman' => 0, 'perHalaman' => [], 'x1Terbesar' => 0.0, 'lebar' => 0.0];
+
+        // pdftotext -layout memberi teks per halaman tanpa dependensi PHP baru;
+        // kalau tidak tersedia, test ini dilewati (bukan gagal) agar CI tanpa
+        // poppler tidak merah hanya karena alat bantu.
+        $ada = shell_exec('command -v pdftotext 2>/dev/null');
+        if (! $ada) {
+            @unlink($tmp);
+            $this->markTestSkipped('pdftotext tidak tersedia untuk membaca ulang PDF.');
+        }
+
+        $keluar = shell_exec('pdftotext -layout '.escapeshellarg($tmp).' - 2>/dev/null') ?? '';
+        $halamanTeks = preg_split("/\f/", $keluar) ?: [];
+
+        $hasil['halaman'] = count(array_filter($halamanTeks, fn ($t) => trim($t) !== ''));
+        foreach ($halamanTeks as $i => $t) {
+            if (trim($t) === '') {
+                continue;
+            }
+            $hasil['perHalaman'][$i + 1] = array_map('trim', explode("\n", $t));
+        }
+
+        // Lebar halaman A4 dalam pt (595.28). Dipakai untuk batas margin.
+        $hasil['lebar'] = 595.28;
+        $hasil['x1Terbesar'] = $this->x1NomorHalaman($tmp);
+
+        @unlink($tmp);
+
+        return $hasil;
+    }
+
+    /**
+     * Ambil posisi x paling kanan dari teks nomor halaman.
+     */
+    private function x1NomorHalaman(string $berkas): float
+    {
+        $ada = shell_exec('command -v pdftotext 2>/dev/null');
+        if (! $ada) {
+            return 0.0;
+        }
+
+        // pdftotext -bbox melaporkan kotak setiap kata: <word xMin= yMin= xMax= yMax=>
+        $xml = shell_exec('pdftotext -bbox '.escapeshellarg($berkas).' - 2>/dev/null') ?? '';
+        $maks = 0.0;
+
+        if (preg_match_all('/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)"/', $xml, $m) === false) {
+            return 0.0;
+        }
+
+        // Kata yang berada di pita footer (y > 780pt).
+        foreach ($m[2] as $i => $y) {
+            if ((float) $y > 780) {
+                $maks = max($maks, (float) $m[3][$i]);
+            }
+        }
+
+        return $maks;
+    }
+
+    /**
      * Saldo akhir dihitung lewat service, bukan dibaca dari teks PDF —
      * teks PDF tidak andal untuk asersi angka.
      */
