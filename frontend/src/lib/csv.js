@@ -35,3 +35,23 @@ export function namaFileCsv(prefix) {
   const p = (n) => String(n).padStart(2, '0')
   return `${prefix}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.csv`
 }
+
+/**
+ * Nama berkas CSV mengikuti pola PDF dari server:
+ * `Nontix_Laporan-Keuangan_<Organizer>_<YYYY-MM>.csv`
+ *
+ * Tujuannya supaya CSV dan PDF untuk periode yang sama tersimpan sebagai satu
+ * keluarga berkas — mudah dicari dan tidak tertukar dengan unduhan lain.
+ * Karakter haram di Windows dibuang, sama seperti di sisi server.
+ */
+export function namaFileLaporan(jenis, organizer, ekstensi = 'csv') {
+  const bulan = new Date().toISOString().slice(0, 7)
+  const bersih = String(organizer || 'Nontix')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\/:*?"<>|]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .slice(0, 60) || 'Nontix'
+  return `Nontix_Laporan-${jenis}_${bersih}_${bulan}.${ekstensi}`
+}

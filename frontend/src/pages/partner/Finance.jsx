@@ -5,7 +5,7 @@ import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
 import { BIAYA_LAYANAN } from '../../lib/constants'
-import { downloadCsv, namaFileCsv } from '../../lib/csv'
+import { downloadCsv, namaFileLaporan } from '../../lib/csv'
 
 export default function Finance() {
   const [exportOpen, setExportOpen] = useState(false)
@@ -116,19 +116,16 @@ export default function Finance() {
     }
   }
 
-  // Kolom mengikuti laporan balance bank (tanggal, jenis transaksi, referensi,
-  // uraian, tipe baris, kanal, nominal, saldo berjalan), disesuaikan dengan
-  // istilah di Nontix.
+  // Ekspor CSV disusun sebagai BLOK, meniru halaman PDF.
+  //
+  // Sebelumnya semua blok ditumpuk tanpa kolom yang seragam: baris ringkasan
+  // hanya 2 kolom sementara tabel mutasi 8 kolom, sehingga di Excel kolomnya
+  // bergeser dan tabel tidak terbaca. Sekarang setiap tabel punya header
+  // sendiri dan jumlah kolomnya konsisten di dalam satu blok.
   const unduhLaporan = () => {
-    const baris = []
-
-    // Urutkan kronologis (lama → baru) supaya saldo berjalan bisa dihitung.
-    const kronologis = [...transaksi].sort(
-      (a, b) => new Date(a.tanggal || 0) - new Date(b.tanggal || 0),
-    )
-
     const angka = (n) => Number(n || 0)
     const tgl = (iso) => (iso ? formatTanggal(iso, { withTime: true }) : '')
+    const rp = (n) => Math.round(angka(n))
     const kanal = (t) => {
       if (t.sumber === 'manual' || t.jenis === 'penjualan_manual') {
         const m = t.metode_bayar
@@ -140,6 +137,12 @@ export default function Finance() {
       return 'MAYAR'
     }
 
+    // Urutkan kronologis (lama → baru) supaya saldo berjalan bisa dihitung.
+    const kronologis = [...transaksi].sort(
+      (a, b) => new Date(a.tanggal || 0) - new Date(b.tanggal || 0),
+    )
+
+    const mutasi = []
     let saldo = 0
     let totalBruto = 0
     let totalBiaya = 0
@@ -156,73 +159,124 @@ export default function Finance() {
       saldo += bruto
       totalBruto += bruto
       totalTiket += angka(t.jumlah_tiket)
-      baris.push([
-        tgl(t.tanggal), 'PENJUALAN TIKET', t.kode_order, `${pembeli} — ${t.event}, ${t.jumlah_tiket} tiket`,
-        'MASUK', kanal(t), bruto, saldo,
+      mutasi.push([
+        tgl(t.tanggal), 'PENJUALAN TIKET', t.kode_order,
+        `${pembeli} — ${t.event || 'Tanpa Event'}, ${t.jumlah_tiket} tiket`,
+        'MASUK', kanal(t), rp(bruto), rp(saldo),
       ])
 
       // 2) Biaya layanan: potongan platform per tiket.
       if (biaya > 0) {
         saldo -= biaya
         totalBiaya += biaya
-        baris.push([
-          tgl(t.tanggal), 'BIAYA LAYANAN', t.kode_order, `Biaya platform ${formatRupiah(biaya)} (${t.jumlah_tiket} tiket x ${formatRupiah(BIAYA_LAYANAN)})`,
-          'BIAYA', kanal(t), -biaya, saldo,
+        mutasi.push([
+          tgl(t.tanggal), 'BIAYA LAYANAN', t.kode_order,
+          `Biaya platform ${t.jumlah_tiket} tiket`,
+          'BIAYA', kanal(t), rp(-biaya), rp(saldo),
         ])
       }
 
-      // Jejak netto per pesanan: memudahkan rekonsiliasi satu pesanan.
+      // Jejak selisih netto: memudahkan rekonsiliasi satu pesanan.
       if (Math.round(netto) !== Math.round(bruto - biaya)) {
-        baris.push([
-          tgl(t.tanggal), 'SELISIH NETTO', t.kode_order, 'Netto tidak sama dengan bruto dikurangi biaya — periksa pesanan ini',
-          'CATATAN', kanal(t), 0, saldo,
+        mutasi.push([
+          tgl(t.tanggal), 'SELISIH NETTO', t.kode_order,
+          'Netto tidak sama dengan bruto dikurangi biaya — periksa pesanan ini',
+          'CATATAN', kanal(t), 0, rp(saldo),
         ])
       }
     }
 
     // 3) Pencairan: uang keluar dari saldo platform ke rekening partner.
-    for (const p of riwayatPayout) {
+    const payoutSah = riwayatPayout.filter((p) => p.status !== 'ditolak')
+    for (const p of payoutSah) {
       const jumlah = angka(p.jumlah)
-      const status = p.status === 'selesai' ? 'SELESAI' : p.status === 'ditolak' ? 'DITOLAK' : 'DIPROSES'
-      if (status === 'DITOLAK') continue
       saldo -= jumlah
       totalPayout += jumlah
-      baris.push([
+      mutasi.push([
         tgl(p.diajukan_at || p.selesai_at),
         'PENCAIRAN DANA',
         `PAYOUT-${p.id}`,
-        `Transfer ke ${p.nama_bank || '—'} ${p.nomor_rekening || ''} a/n ${p.nama_rekening || '—'} (${status})`,
+        `Transfer ke ${p.nama_bank || '—'} ${p.nomor_rekening || ''} a/n ${p.nama_rekening || '—'}`,
         'KELUAR',
         'TRANSFER BANK',
-        -jumlah,
-        saldo,
+        rp(-jumlah),
+        rp(saldo),
       ])
     }
 
-    baris.sort((a, b) => new Date(a[0] || 0) - new Date(b[0] || 0) || 0)
+    // Setiap tabel diberi header sendiri. Baris judul dan keterangan cukup
+    // satu sel — di Excel isinya tetap terbaca karena tidak ada kolom yang
+    // bergeser di dalam satu blok tabel.
+    const baris = []
+    const judul = (teks) => baris.push([teks])
+    const kosong = () => baris.push([])
+    const tabel = (header, isi) => {
+      baris.push(header)
+      isi.forEach((r) => baris.push(r))
+    }
 
-    const rows = [
-      [`LAPORAN KEUANGAN — ${namaOrganizer || 'Nontix'}`],
-      [`Dibuat: ${formatTanggal(new Date().toISOString(), { withTime: true })}`],
-      ['Saldo awal', 0],
-      ['Saldo akhir (netto tersedia)', Math.round(saldo)],
-      [],
+    // ── Kop ──
+    judul('LAPORAN KEUANGAN')
+    judul(namaOrganizer || 'Nontix')
+    judul(`Dibuat ${formatTanggal(new Date().toISOString(), { withTime: true })} WIB`)
+    kosong()
+
+    // ── Ringkasan ──
+    judul('RINGKASAN')
+    tabel(['Keterangan', 'Nilai', 'Satuan'], [
+      ['Tiket terjual', totalTiket, 'tiket'],
+      ['Penjualan bruto', rp(totalBruto), 'Rp'],
+      ['Biaya layanan', rp(-totalBiaya), 'Rp'],
+      ['Pencairan dana', rp(-totalPayout), 'Rp'],
+      ['Saldo akhir (netto tersedia)', rp(totalBruto - totalBiaya - totalPayout), 'Rp'],
+    ])
+    kosong()
+
+    // ── Mutasi ──
+    judul('MUTASI KEUANGAN')
+    tabel(
       ['Tanggal & Waktu', 'Jenis Transaksi', 'Referensi', 'Uraian', 'Tipe Baris', 'Kanal', 'Nominal (Rp)', 'Saldo (Rp)'],
-      ...baris.map((r) => [r[0], r[1], r[2], r[3], r[4], r[5], Math.round(r[6]), Math.round(r[7])]),
-      [],
-      ['RINGKASAN'],
-      ['Total tiket terjual', totalTiket],
-      ['Total penjualan (bruto)', Math.round(totalBruto)],
-      ['Total biaya layanan', -Math.round(totalBiaya)],
-      ['Total pencairan', -Math.round(totalPayout)],
-      ['Saldo akhir', Math.round(totalBruto - totalBiaya - totalPayout)],
-      [],
-      ['RINGKASAN PER EVENT'],
-      ['Event', 'Tiket Terjual', 'Penjualan Bruto (Rp)', 'Biaya Layanan (Rp)', 'Netto (Rp)'],
-      ...perEvent.map((e) => [e.event, e.tiket, Math.round(e.kotor), Math.round(e.biaya), Math.round(e.bersih)]),
-      ['TOTAL', summary.tiket, Math.round(summary.kotor), Math.round(summary.biaya), Math.round(summary.bersih)],
-    ]
-    downloadCsv(namaFileCsv('laporan-keuangan'), rows)
+      mutasi,
+    )
+    kosong()
+
+    // ── Rekap per event ──
+    judul('RINGKASAN PER EVENT')
+    tabel(['Event', 'Tiket Terjual', 'Penjualan Bruto (Rp)', 'Biaya Layanan (Rp)', 'Netto (Rp)'], [
+      ...perEvent.map((e) => [e.event, e.tiket, rp(e.kotor), rp(e.biaya), rp(e.bersih)]),
+      ['TOTAL', summary.tiket, rp(summary.kotor), rp(summary.biaya), rp(summary.bersih)],
+    ])
+    kosong()
+
+    // ── Riwayat pencairan ──
+    judul('RIWAYAT PENCAIRAN')
+    if (riwayatPayout.length === 0) {
+      baris.push(['Belum ada pencairan dana.'])
+    } else {
+      tabel(['Tanggal Pengajuan', 'Referensi', 'Bank', 'Nomor Rekening', 'Atas Nama', 'Jumlah (Rp)', 'Status'], [
+        ...riwayatPayout.map((p) => [
+          tgl(p.diajukan_at),
+          `PAYOUT-${p.id}`,
+          p.nama_bank || '—',
+          p.nomor_rekening || '—',
+          p.nama_rekening || '—',
+          rp(p.jumlah),
+          p.status === 'selesai' ? 'SELESAI' : p.status === 'ditolak' ? 'DITOLAK' : 'DIPROSES',
+        ]),
+        [
+          'TOTAL CAIR', '', '', '', '',
+          rp(payoutSah.reduce((n, p) => n + angka(p.jumlah), 0)), '',
+        ],
+      ])
+    }
+    kosong()
+
+    // ── Catatan ──
+    judul('CATATAN')
+    judul('Hanya pesanan lunas yang dihitung. Pencairan berstatus DITOLAK tidak mengurangi saldo.')
+    judul(`Biaya layanan ${formatRupiah(BIAYA_LAYANAN)} per tiket. Nilai dalam Rupiah.`)
+
+    downloadCsv(namaFileLaporan('Keuangan', namaOrganizer), baris)
     setDone(true)
   }
 
@@ -490,11 +544,11 @@ export default function Finance() {
               </div>
             </div>
             <ul className="space-y-1 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
-              <li>• <span className="font-semibold">Mutasi</span> — tanggal, jenis transaksi, referensi, uraian, tipe baris, kanal, nominal, dan saldo berjalan.</li>
-              <li>• Tiap penjualan menghasilkan dua baris: uang masuk dan biaya layanan, sehingga saldo akhirnya jelas.</li>
+              <li>• <span className="font-semibold">Blok terpisah</span> — kop, ringkasan, mutasi, rekap per event, dan riwayat pencairan. Tiap tabel punya baris judul kolom sendiri, jadi tidak perlu dirapikan manual di Excel.</li>
+              <li>• <span className="font-semibold">Mutasi</span> — tanggal, jenis transaksi, referensi, uraian, tipe baris, kanal, nominal, dan saldo berjalan. Tiap penjualan jadi dua baris: uang masuk dan biaya layanan.</li>
               <li>• <span className="font-semibold">Ringkasan</span> — total tiket, penjualan bruto, biaya layanan, pencairan, dan saldo akhir.</li>
-              <li>• <span className="font-semibold">Ringkasan per event</span> — tiket terjual, bruto, biaya, netto.</li>
-              <li>• Hanya pada PDF: <span className="font-semibold">riwayat pencairan</span> beserta status dan catatan admin.</li>
+              <li>• <span className="font-semibold">Riwayat pencairan</span> — semua pengajuan beserta statusnya; pencairan yang ditolak tidak mengurangi saldo.</li>
+              <li>• Nomor disimpan sebagai angka, bukan teks berformat, supaya bisa langsung dijumlah di Excel.</li>
             </ul>
             {galatUnduh && <p className="text-sm font-medium text-rose-600">{galatUnduh}</p>}
           </div>
