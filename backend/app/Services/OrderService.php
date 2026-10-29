@@ -54,6 +54,14 @@ class OrderService
                     throw ValidationException::withMessages(['items' => 'Jenis tiket tidak ditemukan pada event ini.']);
                 }
 
+                // Tiket nonaktif tidak boleh dibeli, walau ID-nya masih
+                // dikirim dari halaman yang sudah lama terbuka.
+                if ($ticketType->status !== 'aktif') {
+                    throw ValidationException::withMessages([
+                        'items' => "Tiket {$ticketType->nama_tiket} sudah tidak dijual.",
+                    ]);
+                }
+
                 $jumlah = (int) $row['jumlah'];
 
                 if ($jumlah < 1) {
@@ -162,6 +170,14 @@ class OrderService
                 if (! $ticketType) {
                     throw ValidationException::withMessages([
                         'items' => 'Jenis tiket tidak ditemukan pada event ini.',
+                    ]);
+                }
+
+                // Penjualan manual pun tunduk pada status tiket: menjual tiket
+                // yang sudah dinonaktifkan membuat laporan dan kuota kacau.
+                if ($ticketType->status !== 'aktif') {
+                    throw ValidationException::withMessages([
+                        'items' => "Tiket {$ticketType->nama_tiket} sudah tidak dijual.",
                     ]);
                 }
 

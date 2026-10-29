@@ -28,7 +28,18 @@ class EventResource extends JsonResource
                 'logo_url' => $this->organizer->logo_url,
             ]),
             'sessions' => EventSessionResource::collection($this->whenLoaded('sessions')),
-            'tiket' => TicketTypeResource::collection($this->whenLoaded('ticketTypes')),
+            // Tiket nonaktif hanya disembunyikan dari PUBLIK. Partner tetap
+            // harus melihatnya di halaman kelola — kalau tidak, tiket yang
+            // dinonaktifkan akan hilang dari pandangannya dan tidak bisa
+            // diaktifkan kembali. Resource ini dipakai dua-duanya, jadi
+            // pembedaannya lewat permintaan yang sedang berjalan.
+            'tiket' => TicketTypeResource::collection($this->whenLoaded('ticketTypes', function () {
+                $semua = $this->ticketTypes->values();
+
+                return request()->is('api/partner/*')
+                    ? $semua
+                    : $semua->where('status', 'aktif')->values();
+            })),
             'formFields' => $this->whenLoaded('formFields', fn () => $this->formFields
                 ->where('status', 'aktif')
                 ->values()
@@ -41,7 +52,9 @@ class EventResource extends JsonResource
                     'urutan' => $f->urutan,
                     'ticket_type_id' => $f->ticket_type_id,
                 ])),
-            'total_sisa_kuota' => $this->whenLoaded('ticketTypes', fn () => (int) $this->ticketTypes->sum('sisa_kuota')),
+            'total_sisa_kuota' => $this->whenLoaded('ticketTypes', fn () => (int) $this->ticketTypes
+                ->when(! request()->is('api/partner/*'), fn ($c) => $c->where('status', 'aktif'))
+                ->sum('sisa_kuota')),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
