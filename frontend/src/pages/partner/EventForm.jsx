@@ -555,7 +555,7 @@ export default function EventForm() {
             )}
             {tiket.length > 0 && (
               <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full min-w-[720px] text-sm">
+                <table className="w-full min-w-[660px] text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
                       <th className="px-4 py-2.5 font-semibold">Jenis Tiket</th>
@@ -563,7 +563,7 @@ export default function EventForm() {
                       <th className="px-4 py-2.5 font-semibold">Kuota</th>
                       <th className="px-4 py-2.5 font-semibold">Jam Masuk</th>
                       <th className="px-4 py-2.5 font-semibold">Sesi</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Aksi</th>
+                      <th className="sticky right-0 bg-slate-50 px-4 py-2.5 text-right font-semibold">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -572,7 +572,7 @@ export default function EventForm() {
                       const bundle = isBundleTicket(t)
                       const belumSesi = eventSessions.length > 0 && sesi.length === 0
                       return (
-                        <tr key={t._key} className={belumSesi ? 'bg-rose-50/40' : 'hover:bg-slate-50'}>
+                        <tr key={t._key} className={belumSesi ? 'bg-rose-50' : 'bg-white hover:bg-slate-50'}>
                           <td className="px-4 py-2.5">
                             <div className="flex items-center gap-2.5">
                               <span className="grid h-9 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-brand-100 text-brand-700">
@@ -617,7 +617,7 @@ export default function EventForm() {
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-2.5">
+                          <td className={`sticky right-0 px-4 py-2.5 ${belumSesi ? 'bg-rose-50' : 'bg-white'}`}>
                             <div className="flex items-center justify-end gap-1">
                               <Button size="sm" variant="secondary" onClick={() => bukaModalTiket(t)}>
                                 <Pencil size={13} /> Edit
