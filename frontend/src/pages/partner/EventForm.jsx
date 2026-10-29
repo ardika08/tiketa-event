@@ -2,16 +2,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Save, Send, Plus, Trash2, GripVertical, Info,
-  AlertTriangle,
+  AlertTriangle, Pencil, Power, PowerOff, Ticket as TicketIcon, Download,
 } from 'lucide-react'
-import { Button, Card, Field, Input, Select, Textarea, Badge, PageHeader } from '../../components/ui'
+import { Button, Card, Field, Input, Select, Textarea, Badge, PageHeader, Modal } from '../../components/ui'
 import { ImagePicker } from '../../components/ImagePicker'
 import { KATEGORI } from '../../lib/constants'
 import { ticketSessionIds, isBundleTicket } from '../../lib/ticketGroups'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { normalizeEvent } from '../../lib/normalize'
-import { cn } from '../../lib/utils'
+import { cn, formatRupiah } from '../../lib/utils'
 
 /**
  * Cari celah jam antar kategori tiket — mis. Baby Shower tutup 10:00 tapi
@@ -107,9 +107,14 @@ export default function EventForm() {
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
 
   const save = async (status) => {
+    // Kalau modal edit tiket masih terbuka, isiannya belum masuk daftar.
+    // Tanpa ini, perubahan terakhir partner hilang tanpa peringatan.
+    const tiketFinal = gabungDraft(tiket)
+    if (draft) { setTiketModal(null); setDraft(null) }
+
     // FASE 3: kategori tiket wajib punya minimal 1 sesi. Kategori tanpa sesi
     // menghasilkan QR yang tidak bisa dipakai check-in di gate mana pun.
-    const tanpaSesi = tiket.filter((t) => t.nama_tiket && ticketSessionIds(t).length === 0)
+    const tanpaSesi = tiketFinal.filter((t) => t.nama_tiket && ticketSessionIds(t).length === 0)
     if (tanpaSesi.length > 0) {
       const daftar = tanpaSesi.map((t) => `• ${t.nama_tiket}`).join('\n')
       window.alert(
@@ -159,7 +164,7 @@ export default function EventForm() {
       }
 
       const keptIds = []
-      for (const t of tiket) {
+      for (const t of tiketFinal) {
         if (!t.nama_tiket) continue
         const ticketPayload = {
           event_id: eventId,
@@ -185,7 +190,7 @@ export default function EventForm() {
       }
 
       // Formulir custom: simpan field sungguhan (create/update/delete) + scope tiket.
-      const ticketIdByKey = new Map(tiket.map((t) => [String(t._key), t.id]))
+      const ticketIdByKey = new Map(tiketFinal.map((t) => [String(t._key), t.id]))
       const keptFieldIds = []
       let fieldUrutan = 1
       for (const f of fields.filter((x) => !x.event_id || x.event_id === eventId)) {
@@ -247,20 +252,68 @@ export default function EventForm() {
 
   const removeSession = (key) => setSessions((list) => list.filter((s) => s._key !== key))
 
-  const updateTiket = (key, field, value) =>
-    setTiket((list) => list.map((t) => (t._key === key ? { ...t, [field]: value } : t)))
+  // Modal edit tiket: tiket di tab ini masih DRAF di memori (belum tersimpan
+  // ke server), jadi perubahannya ditahan dulu di `draft`, lalu baru masuk ke
+  // daftar saat partner menekan Simpan. Dengan begitu tabel tetap ringkas
+  // walau tiketnya banyak, dan tombol Batal benar-benar membatalkan.
+  const [tiketModal, setTiketModal] = useState(null) // _key tiket yang diedit
+  const [draft, setDraft] = useState(null)
 
-  const toggleTicketSession = (key, sessionId) =>
-    setTiket((list) =>
-      list.map((t) => {
-        if (t._key !== key) return t
-        const current = ticketSessionIds(t)
-        const next = current.includes(sessionId)
-          ? current.filter((sid) => sid !== sessionId)
-          : [...current, sessionId]
-        return { ...t, session_ids: next, session_id: next[0] ?? null }
-      }),
-    )
+  const bukaModalTiket = (t) => {
+    setTiketModal(t._key)
+    setDraft({ ...t, session_ids: [...ticketSessionIds(t)] })
+  }
+
+  // Batal pada tiket BARU berarti membuang baris kosongnya. Tanpa ini,
+  // daftar menyimpan entri tanpa nama yang membingungkan saat event disimpan.
+  const batalDraft = () => {
+    if (draft && !draft.id && !(draft.nama_tiket || '').trim()) {
+      setTiket((l) => l.filter((x) => x._key !== draft._key))
+    }
+    setTiketModal(null)
+    setDraft(null)
+  }
+
+  const ubahDraft = (field, value) => setDraft((d) => (d ? { ...d, [field]: value } : d))
+
+  const toggleDraftSession = (sessionId) => {
+    setDraft((d) => {
+      if (!d) return d
+      const ada = ticketSessionIds(d).includes(sessionId)
+      return {
+        ...d,
+        session_ids: ada
+          ? ticketSessionIds(d).filter((s) => s !== sessionId)
+          : [...ticketSessionIds(d), sessionId],
+      }
+    })
+  }
+
+  // Gabungkan draft yang masih terbuka ke dalam daftar, lalu kembalikan
+  // daftar hasilnya. Nilainya dikembalikan (bukan hanya di-set) karena
+  // setTiket bersifat asinkron: pada render yang sama, variabel `tiket`
+  // di save() belum tentu sudah memuat perubahan terbaru.
+  const gabungDraft = (daftar) => {
+    if (!draft) return daftar
+    return daftar
+      .map((t) => (t._key === draft._key
+        ? ((draft.nama_tiket || '').trim() ? { ...draft, nama_tiket: draft.nama_tiket.trim() } : t)
+        : t))
+      .filter((t) => (t.nama_tiket || '').trim() || t.id)
+  }
+
+  const simpanDraft = () => {
+    if (!draft) return
+    const nama = (draft.nama_tiket || '').trim()
+    if (!nama) return alert('Nama tiket wajib diisi.')
+    if (Number(draft.kuota) < 1) return alert('Kuota minimal 1.')
+    if (eventSessions.length > 0 && ticketSessionIds(draft).length === 0) {
+      return alert('Pilih minimal 1 sesi — tanpa sesi, QR tiket ini tidak bisa dipakai check-in.')
+    }
+    setTiket((list) => list.map((t) => (t._key === draft._key ? { ...draft, nama_tiket: nama } : t)))
+    setTiketModal(null)
+    setDraft(null)
+  }
 
   return (
     <div>
@@ -443,7 +496,29 @@ export default function EventForm() {
               <h2 className="font-bold text-slate-900">Jenis Tiket</h2>
               <p className="text-sm text-slate-500">Atur harga, kuota, gambar tiket (opsional), dan batas pembelian.</p>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => setTiket((l) => [...l, { _key: `new-${Date.now()}`, id: null, nama_tiket: '', harga: 0, kuota: 0, sisa_kuota: 0, max_per_order: 4, jam_masuk_mulai: '', jam_masuk_selesai: '', gambar_url: '', session_ids: [] }])}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                // Langsung buka modal: menambah baris kosong ke tabel hanya
+                // membuat partner harus mengklik Edit lagi.
+                const baru = {
+                  _key: `new-${Date.now()}`,
+                  id: null,
+                  nama_tiket: '',
+                  harga: 0,
+                  kuota: 0,
+                  sisa_kuota: 0,
+                  max_per_order: 4,
+                  jam_masuk_mulai: '',
+                  jam_masuk_selesai: '',
+                  gambar_url: '',
+                  session_ids: [],
+                }
+                setTiket((l) => [...l, baru])
+                bukaModalTiket(baru)
+              }}
+            >
               <Plus size={15} /> Tambah
             </Button>
           </div>
@@ -478,106 +553,215 @@ export default function EventForm() {
                 Belum ada jenis tiket. Klik <span className="font-semibold text-slate-700">Tambah</span> untuk menambahkan.
               </div>
             )}
-            {tiket.map((t) => (
-              <div key={t._key} className="rounded-xl border border-slate-200 p-3">
-                <div className="grid gap-3 sm:grid-cols-12">
-                  <div className="sm:col-span-4">
-                    <label className="label text-xs">Nama Tiket</label>
-                    <Input value={t.nama_tiket} onChange={(e) => updateTiket(t._key, 'nama_tiket', e.target.value)} placeholder="Reguler / VIP" />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <label className="label text-xs">Harga (Rp)</label>
-                    <Input type="number" value={t.harga} onChange={(e) => updateTiket(t._key, 'harga', Number(e.target.value))} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="label text-xs">Kuota</label>
-                    <Input type="number" value={t.kuota} onChange={(e) => updateTiket(t._key, 'kuota', Number(e.target.value))} />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="label text-xs">Maks/Order</label>
-                    <Input type="number" value={t.max_per_order} onChange={(e) => updateTiket(t._key, 'max_per_order', Number(e.target.value))} />
-                  </div>
-                  <div className="flex items-end sm:col-span-1">
-                    <Button variant="ghost" size="icon" className="text-rose-600" onClick={() => setTiket((l) => l.filter((x) => x._key !== t._key))}>
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="label text-xs">Jam Masuk Mulai</label>
-                    <Input type="time" value={t.jam_masuk_mulai || ''} onChange={(e) => updateTiket(t._key, 'jam_masuk_mulai', e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="label text-xs">Jam Masuk Selesai</label>
-                    <Input type="time" value={t.jam_masuk_selesai || ''} onChange={(e) => updateTiket(t._key, 'jam_masuk_selesai', e.target.value)} />
-                  </div>
-                </div>
-                <p className="mt-1 text-xs text-slate-400">
-                  Opsional — di gerbang, jam ini jadi jam masuk (gelombang) khusus kategori ini. Kosongkan jika kategori ini boleh masuk kapan saja.
-                </p>
-
-                <div className="mt-3">
-                  <label className="label text-xs">Gambar Tiket (opsional)</label>
-                  <ImagePicker
-                    value={t.gambar_url}
-                    onChange={(url) => updateTiket(t._key, 'gambar_url', url)}
-                    folder="tickets"
-                    label="Unggah Gambar Tiket"
-                    previewClassName="h-16 w-28"
-                  />
-                </div>
-
-                {eventSessions.length > 0 && (
-                  <div className="mt-3">
-                    <label className="label text-xs">Berlaku untuk Sesi</label>
-                    <div className="flex flex-wrap gap-2">
-                      {eventSessions.map((s) => {
-                        const checked = ticketSessionIds(t).includes(s.id)
-                        return (
-                          <label
-                            key={s.id}
-                            className={cn(
-                              'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition',
-                              checked ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600 hover:border-brand-300',
+            {tiket.length > 0 && (
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
+                      <th className="px-4 py-2.5 font-semibold">Jenis Tiket</th>
+                      <th className="px-4 py-2.5 font-semibold">Harga</th>
+                      <th className="px-4 py-2.5 font-semibold">Kuota</th>
+                      <th className="px-4 py-2.5 font-semibold">Jam Masuk</th>
+                      <th className="px-4 py-2.5 font-semibold">Sesi</th>
+                      <th className="px-4 py-2.5 text-right font-semibold">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {tiket.map((t) => {
+                      const sesi = ticketSessionIds(t)
+                      const bundle = isBundleTicket(t)
+                      const belumSesi = eventSessions.length > 0 && sesi.length === 0
+                      return (
+                        <tr key={t._key} className={belumSesi ? 'bg-rose-50/40' : 'hover:bg-slate-50'}>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <span className="grid h-9 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-brand-100 text-brand-700">
+                                {t.gambar_url ? (
+                                  <img
+                                    src={t.gambar_url}
+                                    alt={t.nama_tiket}
+                                    className="h-full w-full object-cover"
+                                    onError={(ev) => { ev.currentTarget.style.display = 'none' }}
+                                  />
+                                ) : <TicketIcon size={14} />}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="font-semibold text-slate-800">{t.nama_tiket || '(tanpa nama)'}</span>
+                                  {bundle && <Badge color="brand">Bundle</Badge>}
+                                </div>
+                                <p className="text-[11px] text-slate-400">maks {t.max_per_order}/pesanan</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 font-semibold text-slate-800">{formatRupiah(t.harga)}</td>
+                          <td className="px-4 py-2.5 text-slate-600">
+                            {Number(t.kuota).toLocaleString('id-ID')}
+                            {Number(t.sisa_kuota) < Number(t.kuota) && (
+                              <p className="text-[11px] text-slate-400">
+                                sisa {Number(t.sisa_kuota).toLocaleString('id-ID')}
+                              </p>
                             )}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleTicketSession(t._key, s.id)}
-                              className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                            />
-                            {s.label}
-                          </label>
-                        )
-                      })}
-                    </div>
-                    <p className="mt-1.5 text-xs text-slate-500">
-                      {isBundleTicket(t)
-                        ? `Bundle ${ticketSessionIds(t).length} sesi (berlaku di beberapa hari).`
-                        : 'Pilih lebih dari satu sesi untuk menjadikannya tiket bundle.'}
-                    </p>
-                  </div>
-                )}
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-600">
+                            {t.jam_masuk_mulai
+                              ? `${t.jam_masuk_mulai}${t.jam_masuk_selesai ? `–${t.jam_masuk_selesai}` : ''}`
+                              : <span className="text-slate-400">—</span>}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {sesi.length === 0 ? (
+                              <span className="text-xs font-semibold text-rose-600">Belum dipilih</span>
+                            ) : (
+                              <span className="text-slate-600">
+                                {bundle ? `${sesi.length} sesi (bundle)` : eventSessions.find((s) => s.id === sesi[0])?.label || '—'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button size="sm" variant="secondary" onClick={() => bukaModalTiket(t)}>
+                                <Pencil size={13} /> Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-rose-600"
+                                title="Hapus dari daftar"
+                                onClick={() => setTiket((l) => l.filter((x) => x._key !== t._key))}
+                              >
+                                <Trash2 size={15} />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-                {eventSessions.length === 0 && (
-                  <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
-                    Belum ada sesi/hari untuk event ini. Tambahkan minimal 1 sesi di tab &quot;Sesi&quot; dulu, lalu pilih sesi tersebut di sini.
-                  </p>
-                )}
+            <p className="text-xs text-slate-400">
+              Klik <span className="font-semibold text-slate-600">Edit</span> untuk mengubah detail tiket.
+              Perubahan baru tersimpan ke daftar setelah ditekan Simpan pada jendela edit.
+            </p>
+          </div>
+        </Card>
+      )}
 
-                {eventSessions.length > 0 && t.nama_tiket && ticketSessionIds(t).length === 0 && (
-                  <p className="mt-2 text-xs font-semibold text-rose-600">
+      {/* ── Modal edit tiket ── */}
+      <Modal
+        open={!!draft}
+        onClose={batalDraft}
+        title={`Edit Tiket — ${draft?.nama_tiket || 'Baru'}`}
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={batalDraft}>Batal</Button>
+            <Button onClick={simpanDraft}>Simpan</Button>
+          </>
+        }
+      >
+        {draft && (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-6">
+              <div className="sm:col-span-3">
+                <label className="label text-xs">Nama Tiket</label>
+                <Input
+                  value={draft.nama_tiket}
+                  onChange={(e) => ubahDraft('nama_tiket', e.target.value)}
+                  placeholder="Reguler / VIP"
+                />
+              </div>
+              <div className="sm:col-span-3">
+                <label className="label text-xs">Harga (Rp)</label>
+                <Input type="number" value={draft.harga} onChange={(e) => ubahDraft('harga', Number(e.target.value))} />
+              </div>
+              <div className="sm:col-span-3">
+                <label className="label text-xs">Kuota</label>
+                <Input type="number" value={draft.kuota} onChange={(e) => ubahDraft('kuota', Number(e.target.value))} />
+              </div>
+              <div className="sm:col-span-3">
+                <label className="label text-xs">Maks/Order</label>
+                <Input type="number" value={draft.max_per_order} onChange={(e) => ubahDraft('max_per_order', Number(e.target.value))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label text-xs">Jam Masuk Mulai</label>
+                <Input type="time" value={draft.jam_masuk_mulai || ''} onChange={(e) => ubahDraft('jam_masuk_mulai', e.target.value)} />
+              </div>
+              <div>
+                <label className="label text-xs">Jam Masuk Selesai</label>
+                <Input type="time" value={draft.jam_masuk_selesai || ''} onChange={(e) => ubahDraft('jam_masuk_selesai', e.target.value)} />
+              </div>
+            </div>
+            <p className="text-xs text-slate-400">
+              Opsional — di gerbang, jam ini jadi jam masuk (gelombang) khusus kategori ini.
+              Kosongkan jika kategori ini boleh masuk kapan saja.
+            </p>
+
+            <div>
+              <label className="label text-xs">Gambar Tiket (opsional)</label>
+              <ImagePicker
+                value={draft.gambar_url}
+                onChange={(url) => ubahDraft('gambar_url', url)}
+                folder="tickets"
+                label="Unggah Gambar Tiket"
+                previewClassName="h-16 w-28"
+              />
+            </div>
+
+            {eventSessions.length > 0 && (
+              <div>
+                <label className="label text-xs">Berlaku untuk Sesi</label>
+                <div className="flex flex-wrap gap-2">
+                  {eventSessions.map((s) => {
+                    const checked = ticketSessionIds(draft).includes(s.id)
+                    return (
+                      <label
+                        key={s.id}
+                        className={cn(
+                          'flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition',
+                          checked
+                            ? 'border-brand-500 bg-brand-50 text-brand-700'
+                            : 'border-slate-200 text-slate-600 hover:border-brand-300',
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleDraftSession(s.id)}
+                          className="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                        />
+                        {s.label}
+                      </label>
+                    )
+                  })}
+                </div>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  {isBundleTicket(draft)
+                    ? `Bundle ${ticketSessionIds(draft).length} sesi (berlaku di beberapa hari).`
+                    : 'Pilih lebih dari satu sesi untuk menjadikannya tiket bundle.'}
+                </p>
+                {ticketSessionIds(draft).length === 0 && (
+                  <p className="mt-1 text-xs font-semibold text-rose-600">
                     Wajib pilih minimal 1 sesi — tanpa sesi, QR tiket ini tidak bisa dipakai check-in.
                   </p>
                 )}
               </div>
-            ))}
+            )}
+
+            {eventSessions.length === 0 && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+                Belum ada sesi/hari untuk event ini. Tambahkan minimal 1 sesi di tab &quot;Sesi&quot; dulu,
+                lalu pilih sesi tersebut di sini.
+              </p>
+            )}
           </div>
-        </Card>
-      )}
+        )}
+      </Modal>
 
       {tab === 'form' && (
         <Card className="p-6">
