@@ -20,7 +20,17 @@ export default function Home() {
   const events = useMemo(() => (data?.data || []).map(normalizeEvent), [data])
 
   const filtered = useMemo(() => {
+    // Event yang seluruh tiketnya habis tidak ditampilkan: pengunjung tidak
+    // bisa membeli apa pun di sana, jadi menampilkannya hanya membuang waktu
+    // mereka. Event tanpa data tiket tetap tampil (mungkin belum dibuka).
+    const adaTiket = (e) => {
+      const tiket = e.tiket || []
+      if (tiket.length === 0) return true
+      return tiket.some((t) => (t.sisa_kuota || 0) > 0)
+    }
+
     return events.filter((e) => {
+      if (!adaTiket(e)) return false
       const matchQ = e.nama_event.toLowerCase().includes(q.toLowerCase())
       const matchK = kategori === 'Semua' || e.kategori === kategori
       const matchLokasi = !lokasi || (e.lokasi || '').toLowerCase().includes(lokasi.toLowerCase())

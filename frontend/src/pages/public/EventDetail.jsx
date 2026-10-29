@@ -65,9 +65,17 @@ export default function EventDetail() {
   }, [event?.id, sessions])
 
   const activeSession = sessions.find((session) => session.id === activeSessionId)
-  const bundleTickets = event?.tiket.filter((ticket) => isBundleTicket(ticket)) || []
+
+  // Tiket yang kuotanya habis tidak ditampilkan ke publik sama sekali.
+  // Menampilkannya hanya memberi harapan yang tidak bisa dipenuhi, dan
+  // menyisakan kartu tanpa tombol beli. Cukup satu aturan di sini supaya
+  // paket, tiket harian, dan pemilihan sesi tidak pernah tidak sinkron.
+  const masihBisaDibeli = (ticket) => (ticket?.sisa_kuota || 0) > 0
+  const tiketTerjual = event?.tiket.filter((ticket) => !masihBisaDibeli(ticket)) || []
+  const bundleTickets = event?.tiket.filter((ticket) => isBundleTicket(ticket) && masihBisaDibeli(ticket)) || []
   const visibleTickets = event?.tiket.filter((ticket) =>
-    !sessions.length || (!isBundleTicket(ticket) && ticketCoversSession(ticket, activeSessionId)),
+    masihBisaDibeli(ticket)
+    && (!sessions.length || (!isBundleTicket(ticket) && ticketCoversSession(ticket, activeSessionId))),
   ) || []
   const countdown = useCountdown(activeSession?.tanggal_mulai || event?.tanggal_mulai || Date.now())
 
@@ -152,17 +160,11 @@ export default function EventDetail() {
             </p>
           )}
           <p className="mt-0.5 text-xs text-slate-500">
-            {habis
-              ? 'Tiket tidak tersedia'
-              : sembunyi
-                ? 'Tersedia'
-                : `Sisa ${ticket.sisa_kuota.toLocaleString('id-ID')} · maks ${ticket.max_per_order}/pesanan`}
+            {sembunyi ? 'Tersedia' : `Sisa ${ticket.sisa_kuota.toLocaleString('id-ID')} · maks ${ticket.max_per_order}/pesanan`}
           </p>
 
           <div className="mt-4">
-            {habis ? (
-              <span className="text-xs font-semibold text-rose-600">Tiket tidak tersedia</span>
-            ) : (
+            {!habis && (
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-slate-500">Jumlah</span>
                 <div className="inline-flex items-center rounded-xl border border-slate-300">
@@ -303,6 +305,20 @@ export default function EventDetail() {
 
               {tab === 'tiket' && (
                 <div className="space-y-8">
+                  {bundleTickets.length === 0 && visibleTickets.length === 0 && (
+                    <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                      <TicketIcon size={24} className="mx-auto mb-2 text-slate-400" />
+                      <p className="text-sm font-semibold text-slate-700">
+                        {tiketTerjual.length > 0 ? 'Tiket sudah habis terjual' : 'Tiket belum tersedia'}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {tiketTerjual.length > 0
+                          ? 'Seluruh kuota tiket untuk event ini sudah terisi. Hubungi penyelenggara untuk informasi lebih lanjut.'
+                          : 'Penyelenggara belum membuka penjualan tiket untuk event ini.'}
+                      </p>
+                    </div>
+                  )}
+
                   {bundleTickets.length > 0 && (
                     <div>
                       <div className="mb-4 flex items-center gap-2">
@@ -332,11 +348,11 @@ export default function EventDetail() {
                       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         {visibleTickets.map((ticket) => renderTicketCard(ticket))}
                       </div>
-                    ) : (
+                    ) : bundleTickets.length > 0 ? (
                       <p className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-slate-500">
                         Tidak ada tiket harian untuk sesi ini. Paket multi-hari di atas tetap bisa dipilih.
                       </p>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )}
