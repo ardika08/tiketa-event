@@ -93,6 +93,7 @@ function FormDataPanel({ order }) {
 export default function Buyers() {
   const [q, setQ] = useState('')
   const [eventName, setEventName] = useState('all')
+  const [jenisTiket, setJenisTiket] = useState('all')
   const [status, setStatus] = useState('all')
   const [expanded, setExpanded] = useState(null)
   const [page, setPage] = useState(1)
@@ -125,10 +126,32 @@ export default function Buyers() {
   const buyers = data?.data || []
   const events = eventsData?.data || []
 
+  // Daftar jenis tiket untuk dropdown filter.
+  //
+  // Satu pesanan bisa berisi beberapa jenis tiket sekaligus (mis. 2 Reguler +
+  // 1 VIP), dan `ticket_names` memuat semuanya. Karena itu pilihannya diambil
+  // dari gabungan seluruh pesanan, bukan dari satu kolom tiket yang sudah
+  // digabung jadi teks.
+  //
+  // Pilihan ikut menyempit saat event difilter: menampilkan tiket milik event
+  // lain hanya akan menghasilkan daftar kosong dan membingungkan.
+  const jenisTiketOpsi = useMemo(() => {
+    const nama = new Set()
+    buyers.forEach((b) => {
+      if (eventName !== 'all' && b.event !== eventName) return
+      Object.values(b.ticket_names || {}).forEach((n) => { if (n) nama.add(n) })
+    })
+    return [...nama].sort((a, b) => a.localeCompare(b, 'id'))
+  }, [buyers, eventName])
+
   const filtered = useMemo(() => {
     return buyers.filter((b) => {
       const matchQ = b.nama.toLowerCase().includes(q.toLowerCase()) || b.email.toLowerCase().includes(q.toLowerCase())
       const matchE = eventName === 'all' || b.event === eventName
+      // Cocokkan ke salah satu jenis tiket di pesanan ini, bukan ke teks
+      // gabungannya — supaya "VIP" tetap ketemu di pesanan "Reguler x2, VIP x1".
+      const matchT = jenisTiket === 'all'
+        || Object.values(b.ticket_names || {}).includes(jenisTiket)
       // "Manual" adalah opsi di dropdown status: menampilkan semua pesanan yang
       // diinput partner (OTS/tunai/transfer), apa pun status bayarnya.
       // Order lama (sebelum kolom sumber ada) dianggap online — itu jalur aslinya.
@@ -137,9 +160,9 @@ export default function Buyers() {
         : status === 'manual'
           ? (b.sumber || 'online') === 'manual'
           : b.status === status
-      return matchQ && matchE && matchS
+      return matchQ && matchE && matchS && matchT
     })
-  }, [buyers, q, eventName, status])
+  }, [buyers, q, eventName, status, jenisTiket])
 
   const jumlahManual = useMemo(
     () => buyers.filter((b) => (b.sumber || 'online') === 'manual').length,
@@ -349,9 +372,28 @@ export default function Buyers() {
             <option value="dibatalkan">Dibatalkan</option>
             <option value="kadaluarsa">Kadaluarsa</option>
           </Select>
-          <Select value={eventName} onChange={(e) => { setEventName(e.target.value); setPage(1) }} className="sm:w-64">
+          <Select
+            value={eventName}
+            onChange={(e) => {
+              setEventName(e.target.value)
+              // Jenis tiket terikat ke event; pilihan lama bisa jadi tidak ada
+              // lagi di event yang baru dipilih.
+              setJenisTiket('all')
+              setPage(1)
+            }}
+            className="sm:w-56"
+          >
             <option value="all">Semua Event</option>
             {events.map((e) => <option key={e.id} value={e.nama_event}>{e.nama_event}</option>)}
+          </Select>
+          <Select
+            value={jenisTiket}
+            onChange={(e) => { setJenisTiket(e.target.value); setPage(1) }}
+            className="sm:w-56"
+            disabled={jenisTiketOpsi.length === 0}
+          >
+            <option value="all">Semua Jenis Tiket</option>
+            {jenisTiketOpsi.map((n) => <option key={n} value={n}>{n}</option>)}
           </Select>
         </div>
       </Card>
@@ -365,7 +407,9 @@ export default function Buyers() {
             title="Tidak ada pembeli"
             description={status === 'manual'
               ? 'Belum ada penjualan manual. Pakai tombol "Jual Tiket Manual" untuk mencatat penjualan di luar website.'
-              : 'Coba ubah kata kunci atau filter event.'}
+              : jenisTiket !== 'all'
+                ? `Tidak ada pembeli untuk jenis tiket "${jenisTiket}". Coba pilih jenis tiket lain atau ubah filter event.`
+                : 'Coba ubah kata kunci atau filter event.'}
           />
         ) : (
           <div className="overflow-x-auto">
