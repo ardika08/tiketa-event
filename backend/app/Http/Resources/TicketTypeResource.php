@@ -23,6 +23,8 @@ class TicketTypeResource extends JsonResource
             'gambar_url' => $this->gambar_url,
             'is_bundle' => (bool) $this->is_bundle,
             'status' => $this->status,
+            // Partner butuh tahu tiketnya disembunyikan dari publik atau tidak.
+            'sembunyi' => (bool) $this->sembunyi,
             'session_ids' => $this->whenLoaded('sessions', fn () => $this->sessions->pluck('id')->values()->all()),
             'sessions' => EventSessionResource::collection($this->whenLoaded('sessions')),
         ];

@@ -36,9 +36,24 @@ class EventResource extends JsonResource
             'tiket' => TicketTypeResource::collection($this->whenLoaded('ticketTypes', function () {
                 $semua = $this->ticketTypes->values();
 
-                return request()->is('api/partner/*')
-                    ? $semua
-                    : $semua->where('status', 'aktif')->values();
+                // Partner melihat semua tiket, termasuk yang tersembunyi —
+                // supaya bisa ditampilkan kembali.
+                if (request()->is('api/partner/*')) {
+                    return $semua;
+                }
+
+                // Publik: buang yang berhenti dijual DAN yang disembunyikan.
+                //
+                // Dua hal berbeda yang harus diperlakukan berbeda:
+                //   status nonaktif = berhenti dijual, dilarang masuk checkout
+                //   sembunyi        = masih dijual, tapi cuma lewat penjualan manual
+                //
+                // Karena itu pembelian tiket tersembunyi TIDAK diblokir di
+                // OrderService — hanya disembunyikan dari daftar pilihan publik.
+                return $semua
+                    ->where('status', 'aktif')
+                    ->where('sembunyi', false)
+                    ->values();
             })),
             'formFields' => $this->whenLoaded('formFields', fn () => $this->formFields
                 ->where('status', 'aktif')

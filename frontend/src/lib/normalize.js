@@ -21,6 +21,8 @@ export function normalizeTicketType(t) {
     max_per_order: Number(t.max_per_order ?? 1),
     session_ids: sessionIds,
     session_id: sessionIds[0] ?? null,
+    // Boolean eksplisit: nilai dari API bisa berupa 0/1, dan `!!0` harus false.
+    sembunyi: !!t.sembunyi,
   }
 }
 

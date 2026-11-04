@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   Plus, Ticket as TicketIcon, Layers, Search, Pencil, Trash2, Power, PowerOff,
+  Eye, EyeOff,
   AlertTriangle, Lock, Users,
 } from 'lucide-react'
 import { Button, Card, PageHeader, ProgressBar, Badge, Modal, Field, Input, Select } from '../../components/ui'
@@ -13,6 +14,8 @@ import { formatRupiah } from '../../lib/utils'
 const EMPTY_FORM = {
   event_id: '', nama_tiket: '', harga: 0, kuota: 0, max_per_order: 4,
   jam_masuk_mulai: '', jam_masuk_selesai: '', session_ids: [], status: 'aktif',
+  // Tiket baru tampil di publik sampai partner menyembunyikannya.
+  sembunyi: false,
 }
 
 /**
@@ -85,6 +88,7 @@ export default function MasterTickets() {
       // perlu menebak bentuk responsenya di sini.
       session_ids: t.session_ids || [],
       status: t.status || 'aktif',
+      sembunyi: !!t.sembunyi,
     })
     setError('')
     setOpen(true)
@@ -116,6 +120,9 @@ export default function MasterTickets() {
       jam_masuk_selesai: form.jam_masuk_selesai || null,
       session_ids: form.session_ids,
       status: form.status,
+      // Ikut dikirim supaya centang "Sembunyikan dari halaman publik" benar-benar
+      // tersimpan, bukan cuma terlihat di layar.
+      sembunyi: !!form.sembunyi,
     }
 
     setSaving(true)
@@ -152,6 +159,30 @@ export default function MasterTickets() {
       reload()
     } catch (err) {
       setNotif({ ok: false, text: err.message || 'Gagal mengubah status tiket.' })
+    }
+  }
+
+  // Sembunyikan/tampilkan di halaman publik.
+  //
+  // Berbeda dari Nonaktifkan: tiket yang disembunyikan TETAP bisa dijual lewat
+  // penjualan manual. Dipakai untuk tiket undangan/komplementer/OTS yang tidak
+  // mau muncul sebagai pilihan di halaman event publik.
+  const ubahSembunyi = async (t) => {
+    const jadiSembunyi = !t.sembunyi
+    setSaving(true)
+    try {
+      await partnerApi.updateTicketType(t.id, { sembunyi: jadiSembunyi })
+      setNotif({
+        ok: true,
+        text: jadiSembunyi
+          ? `Tiket "${t.nama_tiket}" disembunyikan dari halaman publik. Masih bisa dijual lewat Jual Tiket Manual.`
+          : `Tiket "${t.nama_tiket}" kembali tampil di halaman publik.`,
+      })
+      reload()
+    } catch (err) {
+      setNotif({ ok: false, text: err.message || 'Gagal mengubah tampilan tiket.' })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -271,6 +302,10 @@ export default function MasterTickets() {
                               </span>
                               {isBundleTicket(t) && <Badge color="brand"><Layers size={11} /> Bundle</Badge>}
                               {mati && <Badge color="slate">Nonaktif</Badge>}
+                              {/* Sembunyi dari publik tapi masih dijual manual.
+                                  Badge terpisah dari "Nonaktif" supaya partner
+                                  tidak mengira penjualannya sudah berhenti. */}
+                              {t.sembunyi && !mati && <Badge color="amber">Sembunyi</Badge>}
                             </div>
                             <p className="mt-0.5 truncate text-xs text-slate-500">{t.event}</p>
                             {t.jam_masuk_mulai && (
@@ -306,6 +341,24 @@ export default function MasterTickets() {
                         <div className="flex items-center justify-end gap-1.5">
                           <Button size="sm" variant="secondary" onClick={() => bukaEdit(t)} title="Edit tiket">
                             <Pencil size={13} /> Edit
+                          </Button>
+
+                          {/* Sembunyikan dari publik TANPA menghentikan penjualan.
+                              Beda dengan Nonaktifkan yang memblokir checkout.
+                              Aman dipakai di tiket yang sudah punya pembeli. */}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => ubahSembunyi(t)}
+                            disabled={saving || mati}
+                            className={t.sembunyi ? 'text-amber-600 hover:border-amber-300 hover:bg-amber-50' : ''}
+                            title={mati
+                              ? 'Aktifkan dulu tiketnya untuk mengatur tampilan'
+                              : t.sembunyi
+                                ? 'Tampilkan kembali di halaman publik'
+                                : 'Sembunyikan dari halaman publik (masih bisa dijual manual)'}
+                          >
+                            {t.sembunyi ? <><EyeOff size={13} /> Sembunyi</> : <><Eye size={13} /> Tampil</>}
                           </Button>
 
                           {/* Tiket yang sudah terjual tidak bisa dihapus: FK cascade
@@ -465,6 +518,23 @@ export default function MasterTickets() {
               Event ini belum punya sesi/hari. Tambahkan minimal 1 sesi di menu Event dulu, lalu buat tiketnya di sini.
             </p>
           )}
+
+          {/* Sembunyikan dari halaman publik tanpa menghentikan penjualan.
+              Dipakai untuk tiket undangan/komplementer/OTS. */}
+          <label className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={!!form.sembunyi}
+              onChange={(e) => setForm({ ...form, sembunyi: e.target.checked })}
+              className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-brand-600"
+            />
+            <span className="text-xs text-slate-600">
+              <span className="font-semibold text-slate-800">Sembunyikan dari halaman publik</span>
+              <br />
+              Tiket tidak muncul di halaman event, tapi <span className="font-semibold">tetap bisa dijual</span> lewat
+              Jual Tiket Manual. Cocok untuk tiket undangan, komplementer, atau penjualan di lokasi.
+            </span>
+          </label>
 
           {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
         </div>

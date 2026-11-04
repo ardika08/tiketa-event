@@ -201,6 +201,10 @@ class TicketTypeController extends PartnerController
             ]),
             'gambar_url' => ['nullable', 'string', 'max:500'],
             'status' => ['nullable', 'in:aktif,nonaktif'],
+            // Sembunyikan dari halaman publik tanpa menghentikan penjualan.
+            // Dipakai untuk tiket khusus (undangan / komplementer / OTS) yang
+            // tetap dijual lewat penjualan manual.
+            'sembunyi' => ['sometimes', 'boolean'],
         ]);
     }
 }

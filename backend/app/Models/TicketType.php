@@ -24,6 +24,19 @@ class TicketType extends Model
         'gambar_url',
         'is_bundle',
         'status',
+        // Tersembunyi dari halaman publik, tapi masih bisa dijual manual.
+        'sembunyi',
+    ];
+
+    /**
+     * Tiket baru tampil di publik sampai partner menyembunyikannya.
+     *
+     * Default dideklarasikan di model, bukan hanya di kolom DB, supaya
+     * instance yang baru dibuat lewat create() tapi belum di-refresh sudah
+     * punya nilai false — tanpa ini `sembunyi` terbaca null.
+     */
+    protected $attributes = [
+        'sembunyi' => false,
     ];
 
     protected function casts(): array
@@ -31,6 +44,9 @@ class TicketType extends Model
         return [
             'harga' => 'decimal:2',
             'is_bundle' => 'boolean',
+            // boolean() eksplisit supaya nilai dari DB tetap true/false, bukan
+            // 1/0 atau string "0" yang ternyata truthy di JavaScript.
+            'sembunyi' => 'boolean',
         ];
     }
 
