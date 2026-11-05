@@ -191,6 +191,18 @@ export default function Checkout() {
       setSubmitting(true)
       setPayError(null)
       const created = await createOrder(payload)
+
+      // Total Rp 0 sudah dilunasi server (lihat OrderController) supaya QR
+      // langsung terbit. Tidak ada gateway yang perlu dibayar, jadi jangan
+      // minta pembeli menekan tombol bayar lagi.
+      if (created?.status === 'lunas') {
+        // createOrder() sudah menyimpan kode order terakhir, jadi halaman
+        // sukses bisa memuatnya sendiri. Sertakan juga di query agar refresh
+        // halaman tetap menunjuk order yang benar.
+        navigate(`/pembayaran/berhasil?order=${encodeURIComponent(created.kode_order)}`)
+        return
+      }
+
       setPendingOrder(created)
     } catch (err) {
       if (err.errors) {

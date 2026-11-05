@@ -7,6 +7,7 @@ use App\Http\Resources\OrderResource;
 use App\Models\Event;
 use App\Models\FormField;
 use App\Models\Order;
+use App\Enums\PaymentStatus;
 use App\Services\OrderService;
 use App\Services\PaymentManager;
 use Illuminate\Http\Request;
@@ -97,6 +98,23 @@ class OrderController extends Controller
             $data['items'],
             $data['voucher_code'] ?? null,
         );
+
+        // Total Rp 0 (tiket gratis atau voucher menutup seluruh harga) tidak
+        // boleh dikirim ke gateway: banyak provider menolak invoice nominal 0.
+        // Buat jejak pembayaran gratis, lalu markPaid() menghasilkan e-ticket + QR
+        // dengan jalur yang sama seperti callback gateway — tanpa celah bypass.
+        if ((float) $order->total_harga <= 0) {
+            $order->payments()->create([
+                'jumlah' => 0,
+                'status' => PaymentStatus::PENDING,
+                'provider' => 'gratis',
+                'metode' => 'gratis',
+                'payload' => ['sumber' => 'checkout_gratis'],
+            ]);
+            $order = $orders->markPaid($order, ['sumber' => 'checkout_gratis'], 'gratis');
+
+            return (new OrderResource($order))->response()->setStatusCode(201);
+        }
 
         $created = $payments->createFor($order);
 
