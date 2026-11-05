@@ -8,6 +8,7 @@ import DashboardLayout from './layouts/DashboardLayout'
 import Home from './pages/public/Home'
 import EventDetail from './pages/public/EventDetail'
 import Checkout from './pages/public/Checkout'
+import CheckoutTicket from './pages/public/CheckoutTicket'
 import Payment from './pages/public/Payment'
 import PaymentSuccess from './pages/public/PaymentSuccess'
 import Ticket from './pages/public/Ticket'
@@ -62,6 +63,7 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/event/:slug" element={<EventDetail />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/checkout/:eventSlug/:ticketSlug" element={<CheckoutTicket />} />
               <Route path="/pembayaran" element={<Payment />} />
               <Route path="/pembayaran/berhasil" element={<PaymentSuccess />} />
               <Route path="/tiket/saya" element={<Ticket />} />

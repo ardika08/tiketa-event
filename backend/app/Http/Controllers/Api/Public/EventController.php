@@ -48,4 +48,61 @@ class EventController extends Controller
 
         return new EventResource($event);
     }
+
+    /**
+     * Satu tiket untuk halaman checkout langsung.
+     *
+     * Sengaja mengembalikan event + SATU tiket saja, supaya pembeli yang datang
+     * lewat link khusus tidak melihat atau memilih tiket lain. Tiket `sembunyi`
+     * tetap boleh dibuka di sini — itu justru tujuan link ini.
+     */
+    public function tiket(Request $request, string $slug, string $ticketSlug)
+    {
+        $event = Event::query()
+            ->active()
+            ->where('slug', $slug)
+            ->with(['organizer', 'sessions', 'seatPlan', 'formFields'])
+            ->firstOrFail();
+
+        $ticket = $event->ticketTypes()
+            ->where('slug', $ticketSlug)
+            ->where('status', 'aktif')
+            ->with('sessions')
+            ->first();
+
+        abort_if($ticket === null, 404, 'Tiket tidak ditemukan atau sudah tidak dijual.');
+
+        // Tandai permintaan supaya EventResource tidak membuang tiket ini
+        // (tiket sembunyi justru boleh dibuka lewat link langsung).
+        $request->attributes->set('checkout_tiket', true);
+
+        $organizerFields = FormField::where('organizer_id', $event->organizer_id)
+            ->whereNull('event_id')
+            ->whereNull('ticket_type_id')
+            ->where('status', 'aktif')
+            ->orderBy('urutan')
+            ->get();
+
+        // Field khusus tiket ini tetap dipakai walau event-level tidak dimuat,
+        // karena checkout butuh semua pertanyaan yang relevan.
+        $ticketFields = FormField::where('event_id', $event->id)
+            ->where('ticket_type_id', $ticket->id)
+            ->where('status', 'aktif')
+            ->orderBy('urutan')
+            ->get();
+
+        $eventFields = FormField::where('event_id', $event->id)
+            ->whereNull('ticket_type_id')
+            ->where('status', 'aktif')
+            ->orderBy('urutan')
+            ->get();
+
+        $event->setRelation(
+            'formFields',
+            $eventFields->concat($ticketFields)->concat($organizerFields)->sortBy('urutan')->values(),
+        );
+        $event->setRelation('ticketTypes', collect([$ticket]));
+
+        return new EventResource($event);
+    }
 }

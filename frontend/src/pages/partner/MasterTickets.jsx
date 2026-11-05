@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   Plus, Ticket as TicketIcon, Layers, Search, Pencil, Trash2, Power, PowerOff,
-  Eye, EyeOff,
+  Eye, EyeOff, Link2, Copy, Check,
   AlertTriangle, Lock, Users,
 } from 'lucide-react'
 import { Button, Card, PageHeader, ProgressBar, Badge, Modal, Field, Input, Select } from '../../components/ui'
@@ -38,6 +38,7 @@ export default function MasterTickets() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notif, setNotif] = useState(null)
+  const [copiedId, setCopiedId] = useState(null)
 
   const [hapusTarget, setHapusTarget] = useState(null)
   const [menghapus, setMenghapus] = useState(false)
@@ -184,6 +185,26 @@ export default function MasterTickets() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const salinLinkCheckout = async (t) => {
+    // Slug backend auto-generate saat tiket dibuat; tiket lama sudah dibackfill.
+    // Kalau slug kosong (data lama sebelum migrasi), jangan buat link rusak.
+    if (!t.slug || !t.eventData?.slug) {
+      setNotif({ ok: false, text: 'Tiket ini belum punya slug. Simpan ulang tiketnya dulu (Edit > Simpan).' })
+      return
+    }
+    const url = `${window.location.origin}/checkout/${t.eventData.slug}/${t.slug}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setNotif({ ok: true, text: `Link checkout disalin: ${url}` })
+    } catch {
+      // Fallback browser lama / non-HTTPS: pilih teks lewat prompt agar tetap bisa disalin manual.
+      window.prompt('Salin link checkout ini:', url)
+      setNotif({ ok: true, text: 'Link siap disalin.' })
+    }
+    setCopiedId(t.id)
+    setTimeout(() => setCopiedId((cur) => (cur === t.id ? null : cur)), 2000)
   }
 
   const konfirmasiHapus = async () => {
@@ -359,6 +380,22 @@ export default function MasterTickets() {
                                 : 'Sembunyikan dari halaman publik (masih bisa dijual manual)'}
                           >
                             {t.sembunyi ? <><EyeOff size={13} /> Sembunyi</> : <><Eye size={13} /> Tampil</>}
+                          </Button>
+
+                          {/* Link checkout langsung: pembeli buka URL ini dan
+                              langsung checkout tiket ini saja, tanpa melihat
+                              tiket lain. Berlaku juga untuk tiket sembunyi. */}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => salinLinkCheckout(t)}
+                            disabled={saving || mati}
+                            title={mati
+                              ? 'Aktifkan dulu tiketnya untuk menyalin link'
+                              : 'Salin link checkout langsung untuk tiket ini'}
+                          >
+                            {copiedId === t.id ? <Check size={13} /> : <Link2 size={13} />}
+                            {copiedId === t.id ? 'Tersalin' : 'Link'}
                           </Button>
 
                           {/* Tiket yang sudah terjual tidak bisa dihapus: FK cascade

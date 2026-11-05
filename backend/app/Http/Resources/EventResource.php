@@ -42,6 +42,15 @@ class EventResource extends JsonResource
                     return $semua;
                 }
 
+                // Link checkout langsung (api/events/{slug}/tiket/{ticketSlug})
+                // sengaja MENAMPILKAN tiket sembunyi — itulah fungsinya:
+                // membuka satu tiket tertentu tanpa daftar tiket lain.
+                // Controller sudah pre-filter tiket (status aktif + slug cocok);
+                // resource cukup mengembalikan apa yang sudah dipilih.
+                if (request()->attributes->get('checkout_tiket') === true) {
+                    return $semua;
+                }
+
                 // Publik: buang yang berhenti dijual DAN yang disembunyikan.
                 //
                 // Dua hal berbeda yang harus diperlakukan berbeda:
@@ -67,9 +76,14 @@ class EventResource extends JsonResource
                     'urutan' => $f->urutan,
                     'ticket_type_id' => $f->ticket_type_id,
                 ])),
-            'total_sisa_kuota' => $this->whenLoaded('ticketTypes', fn () => (int) $this->ticketTypes
-                ->when(! request()->is('api/partner/*'), fn ($c) => $c->where('status', 'aktif'))
-                ->sum('sisa_kuota')),
+            'total_sisa_kuota' => $this->whenLoaded('ticketTypes', function () {
+                $q = $this->ticketTypes;
+                if (! request()->is('api/partner/*') && request()->attributes->get('checkout_tiket') !== true) {
+                    $q = $q->where('status', 'aktif');
+                }
+
+                return (int) $q->sum('sisa_kuota');
+            }),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

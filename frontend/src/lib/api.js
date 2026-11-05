@@ -226,6 +226,7 @@ export const authApi = {
 export const publicApi = {
   events: (params) => api.get(`/events${query(params)}`, { auth: false }),
   event: (slug) => api.get(`/events/${slug}`, { auth: false }),
+  checkoutTicket: (eventSlug, ticketSlug) => api.get(`/events/${eventSlug}/tiket/${ticketSlug}`, { auth: false }),
   validateVoucher: (payload) => api.post('/vouchers/validate', payload, { auth: false }),
   createOrder: (payload) => api.post('/orders', payload, { auth: false }),
   order: (kode) => api.get(`/orders/${kode}`, { auth: false }),

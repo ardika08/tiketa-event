@@ -38,6 +38,8 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 */
 Route::get('/events', [PublicEventController::class, 'index']);
 Route::get('/events/{slug}', [PublicEventController::class, 'show']);
+// Link checkout langsung per tiket — satu tiket, tanpa daftar tiket lain.
+Route::get('/events/{slug}/tiket/{ticketSlug}', [PublicEventController::class, 'tiket']);
 Route::post('/vouchers/validate', [PublicVoucherController::class, 'validate']);
 
 Route::post('/orders', [PublicOrderController::class, 'store']);

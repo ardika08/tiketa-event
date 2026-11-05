@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class TicketType extends Model
 {
@@ -15,6 +16,7 @@ class TicketType extends Model
     protected $fillable = [
         'event_id',
         'nama_tiket',
+        'slug',
         'harga',
         'kuota',
         'sisa_kuota',
@@ -35,6 +37,28 @@ class TicketType extends Model
      * instance yang baru dibuat lewat create() tapi belum di-refresh sudah
      * punya nilai false — tanpa ini `sembunyi` terbaca null.
      */
+    protected static function booted(): void
+    {
+        static::creating(function (TicketType $ticket): void {
+            if (empty($ticket->slug)) {
+                $ticket->slug = static::uniqueSlug($ticket->event_id, $ticket->nama_tiket);
+            }
+        });
+    }
+
+    public static function uniqueSlug(int $eventId, string $name): string
+    {
+        $base = Str::slug($name) ?: 'tiket';
+        $slug = $base;
+        $suffix = 2;
+
+        while (static::where('event_id', $eventId)->where('slug', $slug)->exists()) {
+            $slug = $base.'-'.$suffix++;
+        }
+
+        return $slug;
+    }
+
     protected $attributes = [
         'sembunyi' => false,
     ];

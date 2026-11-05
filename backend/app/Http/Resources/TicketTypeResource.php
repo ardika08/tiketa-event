@@ -13,6 +13,8 @@ class TicketTypeResource extends JsonResource
             'id' => $this->id,
             'event_id' => $this->event_id,
             'nama_tiket' => $this->nama_tiket,
+            // Dipakai untuk link checkout langsung: /checkout/{eventSlug}/{ticketSlug}
+            'slug' => $this->slug,
             'harga' => (float) $this->harga,
             'kuota' => $this->kuota,
             'sisa_kuota' => $this->sisa_kuota,
