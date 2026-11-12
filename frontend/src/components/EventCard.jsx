@@ -36,7 +36,7 @@ export default function EventCard({ event }) {
         <EventImage src={event.hero_image_url} alt={event.nama_event} className="aspect-video w-full" />
         <div className="absolute left-3 top-3 flex gap-2">
           <Badge color="brand">{event.kategori}</Badge>
-          {habis && <Badge color="red">Kuota Habis</Badge>}
+          {habis && <Badge color="red">SOLD OUT</Badge>}
         </div>
       </div>
       <div className="p-4">

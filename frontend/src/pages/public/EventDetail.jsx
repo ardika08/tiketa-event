@@ -66,17 +66,13 @@ export default function EventDetail() {
 
   const activeSession = sessions.find((session) => session.id === activeSessionId)
 
-  // Tiket yang kuotanya habis tidak ditampilkan ke publik sama sekali.
-  // Menampilkannya hanya memberi harapan yang tidak bisa dipenuhi, dan
-  // menyisakan kartu tanpa tombol beli. Cukup satu aturan di sini supaya
-  // paket, tiket harian, dan pemilihan sesi tidak pernah tidak sinkron.
+  // Tiket yang kuotanya habis TETAP tampil di publik dengan label
+  // SOLD OUT — pembeli melihatnya, bukan menghilang begitu saja.
   const masihBisaDibeli = (ticket) => (ticket?.sisa_kuota || 0) > 0
-  const tiketTerjual = event?.tiket.filter((ticket) => !masihBisaDibeli(ticket)) || []
-  const bundleTickets = event?.tiket.filter((ticket) => isBundleTicket(ticket) && masihBisaDibeli(ticket)) || []
-  const visibleTickets = event?.tiket.filter((ticket) =>
-    masihBisaDibeli(ticket)
-    && (!sessions.length || (!isBundleTicket(ticket) && ticketCoversSession(ticket, activeSessionId))),
-  ) || []
+  const bundleTickets = event?.tiket.filter((ticket) => isBundleTicket(ticket)) || []
+  const visibleTickets = (event?.tiket || []).filter((ticket) =>
+    !sessions.length || (!isBundleTicket(ticket) && ticketCoversSession(ticket, activeSessionId)),
+  )
   const countdown = useCountdown(activeSession?.tanggal_mulai || event?.tanggal_mulai || Date.now())
 
   const selected = useMemo(() => {
@@ -139,7 +135,14 @@ export default function EventDetail() {
         <div className="relative">
           <TicketImage src={ticket.gambar_url} alt={ticket.nama_tiket} className="aspect-video w-full" />
           {habis ? (
-            <span className="absolute left-2 top-2"><Badge color="red">Kuota Habis</Badge></span>
+            <>
+              <div className="absolute inset-0 grid place-items-center bg-slate-900/55">
+                <span className="rotate-[-6deg] rounded-md bg-red-600 px-4 py-1.5 text-sm font-extrabold tracking-wider text-white shadow-lg">
+                  SOLD OUT
+                </span>
+              </div>
+              <span className="absolute left-2 top-2"><Badge color="red">Kuota Habis</Badge></span>
+            </>
           ) : (
             isBundleTicket(ticket) && (
               <span className="absolute left-2 top-2"><Badge color="brand">Bundle</Badge></span>
@@ -160,11 +163,15 @@ export default function EventDetail() {
             </p>
           )}
           <p className="mt-0.5 text-xs text-slate-500">
-            {sembunyi ? 'Tersedia' : `Sisa ${ticket.sisa_kuota.toLocaleString('id-ID')} · maks ${ticket.max_per_order}/pesanan`}
+            {habis
+              ? 'Kuota habis'
+              : (sembunyi ? 'Tersedia' : `Sisa ${ticket.sisa_kuota.toLocaleString('id-ID')} · maks ${ticket.max_per_order}/pesanan`)}
           </p>
 
           <div className="mt-4">
-            {!habis && (
+            {habis ? (
+              <p className="text-xs font-semibold text-red-600">Tidak dapat dibeli</p>
+            ) : (
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-medium text-slate-500">Jumlah</span>
                 <div className="inline-flex items-center rounded-xl border border-slate-300">
@@ -308,14 +315,8 @@ export default function EventDetail() {
                   {bundleTickets.length === 0 && visibleTickets.length === 0 && (
                     <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center">
                       <TicketIcon size={24} className="mx-auto mb-2 text-slate-400" />
-                      <p className="text-sm font-semibold text-slate-700">
-                        {tiketTerjual.length > 0 ? 'Tiket sudah habis terjual' : 'Tiket belum tersedia'}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {tiketTerjual.length > 0
-                          ? 'Seluruh kuota tiket untuk event ini sudah terisi. Hubungi penyelenggara untuk informasi lebih lanjut.'
-                          : 'Penyelenggara belum membuka penjualan tiket untuk event ini.'}
-                      </p>
+                      <p className="text-sm font-semibold text-slate-700">Tiket belum tersedia</p>
+                      <p className="mt-1 text-xs text-slate-500">Penyelenggara belum membuka penjualan tiket untuk event ini.</p>
                     </div>
                   )}
 
