@@ -329,7 +329,7 @@ export default function EventDetail() {
                           <p className="text-xs text-slate-500">Satu tiket untuk beberapa hari sekaligus, lebih hemat.</p>
                         </div>
                       </div>
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 [&>*]:h-full">
                         {bundleTickets.map((ticket) => renderTicketCard(ticket))}
                       </div>
                     </div>
@@ -346,7 +346,7 @@ export default function EventDetail() {
                       </div>
                     </div>
                     {visibleTickets.length > 0 ? (
-                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 [&>*]:h-full">
                         {visibleTickets.map((ticket) => renderTicketCard(ticket))}
                       </div>
                     ) : bundleTickets.length > 0 ? (
