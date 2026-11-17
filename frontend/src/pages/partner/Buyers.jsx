@@ -4,7 +4,7 @@ import { Button, Card, Input, PageHeader, Select, StatusBadge, EmptyState, Modal
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
-import { downloadCsv, namaFileCsv } from '../../lib/csv'
+import { downloadXlsx, namaFileXlsx } from '../../lib/csv'
 
 const PER_PAGE = 6
 
@@ -108,6 +108,7 @@ export default function Buyers() {
   const [emailSending, setEmailSending] = useState(false)
   // Status unduh laporan PDF: mencegah klik ganda saat server menyusun dokumen.
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [eksporLoading, setEksporLoading] = useState(false)
 
   // Riwayat pengiriman email satu pesanan.
   const [riwayatModal, setRiwayatModal] = useState(null)
@@ -292,18 +293,30 @@ export default function Buyers() {
     }
   }
 
-  // Ekspor CSV dari baris yang sedang tampil (ikut filter & pencarian),
+  // Ekspor Excel (.xlsx) dari baris yang sedang tampil (ikut filter & pencarian),
   // supaya isi berkasnya sama dengan yang dilihat partner di layar.
-  function ekspor() {
-    const header = ['Kode Pesanan', 'Nama Pembeli', 'Email', 'WhatsApp', 'Instagram', 'TikTok', 'Threads', 'Event', 'Tiket', 'Jumlah', 'Total', 'Status', 'Sumber', 'Metode Bayar', 'Diinput Oleh', 'Tanggal']
-    const body = filtered.map((b) => [
-      b.kode_order, b.nama, b.email, b.whatsapp, b.instagram, b.tiktok, b.threads,
-      b.event, b.tiket, b.jumlah, b.total, b.status,
-      b.sumber === 'manual' ? 'Manual' : 'Online',
-      LABEL_METODE[b.metode_bayar] || '', b.dibuat_oleh || '',
-      formatTanggal(b.tanggal, { withTime: true }),
-    ])
-    downloadCsv(namaFileCsv('data-pembeli'), [header, ...body])
+  // Format .xlsx dipilih karena CSV tidak bisa dibuka rapi di semua Excel desktop:
+  // delimiter `;` cocok di Indonesia tapi rusak di US/UK, dan `.csv` TAB tidak
+  // otomatis dipisahkan Excel saat double-click. Lihat lib/csv.js untuk catatan.
+  async function ekspor() {
+    setEksporLoading(true)
+    setNotif(null)
+    try {
+      const header = ['Kode Pesanan', 'Nama Pembeli', 'Email', 'WhatsApp', 'Instagram', 'TikTok', 'Threads', 'Event', 'Tiket', 'Jumlah', 'Total', 'Status', 'Sumber', 'Metode Bayar', 'Diinput Oleh', 'Tanggal']
+      const body = filtered.map((b) => [
+        b.kode_order, b.nama, b.email, b.whatsapp, b.instagram, b.tiktok, b.threads,
+        b.event, b.tiket, Number(b.jumlah) || 0, Number(b.total) || 0, b.status,
+        b.sumber === 'manual' ? 'Manual' : 'Online',
+        LABEL_METODE[b.metode_bayar] || '', b.dibuat_oleh || '',
+        formatTanggal(b.tanggal, { withTime: true }),
+      ])
+      await downloadXlsx(namaFileXlsx('data-pembeli'), [header, ...body])
+      setNotif({ ok: true, text: 'File Excel berhasil diunduh.' })
+    } catch (err) {
+      setNotif({ ok: false, text: err?.message || 'Gagal menyiapkan file Excel.' })
+    } finally {
+      setEksporLoading(false)
+    }
   }
 
   // Unduh laporan PDF. Isinya disusun server (bukan dari baris di layar),
@@ -338,8 +351,9 @@ export default function Buyers() {
             <Button onClick={bukaManual}>
               <Plus size={16} /> Jual Tiket Manual
             </Button>
-            <Button variant="secondary" onClick={ekspor} disabled={filtered.length === 0}>
-              <Download size={16} /> Ekspor CSV
+            <Button variant="secondary" onClick={ekspor} disabled={eksporLoading || filtered.length === 0}>
+              {eksporLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              {eksporLoading ? 'Menyiapkan…' : 'Ekspor Excel'}
             </Button>
             <Button variant="secondary" onClick={unduhPdf} disabled={pdfLoading || buyers.length === 0}>
               {pdfLoading ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
