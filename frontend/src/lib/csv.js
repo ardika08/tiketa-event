@@ -4,10 +4,27 @@
 // menampilkan pesan sukses tanpa menghasilkan file apa pun. Fungsi ini membuat
 // file CSV asli dari data yang sudah tampil di halaman, jadi apa yang
 // dijanjikan tombolnya benar-benar terjadi.
+//
+// DELIMITER: TAB, bukan koma atau titik-koma.
+//
+// Excel Indonesia memakai pemisah list `;`, Excel US/UK dan LibreOffice
+// memakai `,`. Memilih salah satunya bikin file rusak di tempat lain — ini
+// yang jadi keluhan user "CSV isinya jadi satu kolom". Tab bekerja di SEMUA
+// locale: Excel (ID/US/UK/…), LibreOffice, Google Sheets, Numbers membaca
+// tab tanpa menampilkan Text Import Wizard. Ekstensi tetap `.csv` supaya
+// double-click tetap membuka Excel.
 
 function escapeCell(value) {
   const s = value === null || value === undefined ? '' : String(value)
-  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  // Excel menjalankan teks yang dimulai =, +, -, @ sebagai formula. Pembeli
+  // bisa saja punya nama/instagram/catatan yang kebetulan diawali itu — tanpa
+  // prefix kutip tunggal, file terbuka dengan peringatan keamanan atau baris
+  // rusak. Tab dan newline di dalam sel mengacaukan parsing, jadi diganti.
+  const aman = s
+    .replace(/^[=+\-@\t\r]/, (m) => `'${m}`)
+    .replace(/\t/g, ' ')
+    .replace(/[\r\n]+/g, ' ')
+  return /["]/.test(aman) ? `"${aman.replace(/"/g, '""')}"` : aman
 }
 
 /**
@@ -15,10 +32,9 @@ function escapeCell(value) {
  * @param {Array<Array<string|number>>} rows baris-baris CSV (baris kosong = [])
  */
 export function downloadCsv(filename, rows) {
-  // Titik-koma sebagai pemisah + BOM UTF-8 supaya Excel versi Indonesia
-  // langsung memisahkan kolom dengan benar dan tidak merusak karakter aksen.
-  const isi = rows.map((row) => row.map(escapeCell).join(';')).join('\r\n')
-  const blob = new Blob([`\uFEFF${isi}`], { type: 'text/csv;charset=utf-8;' })
+  // BOM UTF-8 supaya Excel membaca karakter beraksen (é, ñ, dst.) dengan benar.
+  const isi = rows.map((row) => row.map(escapeCell).join('\t')).join('\r\n')
+  const blob = new Blob([`\uFEFF${isi}`], { type: 'text/plain;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
