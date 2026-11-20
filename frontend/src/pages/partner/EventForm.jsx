@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft, Save, Send, Plus, Trash2, GripVertical, Info,
@@ -11,6 +11,7 @@ import { ticketSessionIds, isBundleTicket } from '../../lib/ticketGroups'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { normalizeEvent } from '../../lib/normalize'
+import { duplicateBuyerField } from '../../lib/buyerFields'
 import { cn, formatRupiah } from '../../lib/utils'
 
 /**
@@ -91,6 +92,10 @@ function TicketScopePicker({ field, tickets, onChange }) {
 
 export default function EventForm() {
   const { id } = useParams()
+  return <EventFormEditor key={id} id={id} />
+}
+
+function EventFormEditor({ id }) {
   const navigate = useNavigate()
   const isNew = id === 'baru'
 
@@ -103,6 +108,8 @@ export default function EventForm() {
   const [tab, setTab] = useState('info')
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const createdEventId = useRef(null)
   const [form, setForm] = useState({
     nama_event: '',
     kategori: 'Konser',
@@ -150,16 +157,27 @@ export default function EventForm() {
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
 
   const save = async (status) => {
+    if (savingRef.current) return
+
     // Kalau modal edit tiket masih terbuka, isiannya belum masuk daftar.
     // Tanpa ini, perubahan terakhir partner hilang tanpa peringatan.
     const tiketFinal = gabungDraft(tiket)
-    if (draft) { setTiketModal(null); setDraft(null) }
+    if (draft) { setTiket(tiketFinal); setTiketModal(null); setDraft(null) }
 
     const namedTicketKeys = new Set(tiketFinal.filter((t) => t.nama_tiket).map((t) => String(t._key)))
     const unassignedField = fields.find((f) => f.ticket_keys !== null && !f.ticket_keys.some((key) => namedTicketKeys.has(key)))
     if (unassignedField) {
       setTab('form')
       window.alert(`Pilih minimal satu tiket untuk “${unassignedField.label}”, atau ubah menjadi Semua tiket.`)
+      return
+    }
+
+    const duplicate = duplicateBuyerField(fields.filter((f) => f.status !== 'nonaktif').map((f) => ({
+      label: f.label || '', ticketKeys: f.ticket_keys?.filter((key) => namedTicketKeys.has(key)) ?? null,
+    })))
+    if (duplicate) {
+      setTab('form')
+      window.alert(`“${duplicate}” dipakai lebih dari sekali pada cakupan yang sama. Ubah nama kolom atau pilih tiket yang berbeda.`)
       return
     }
 
@@ -176,6 +194,7 @@ export default function EventForm() {
       return
     }
 
+    savingRef.current = true
     setSaving(true)
     try {
       const sessionsPayload = sessions
@@ -206,10 +225,12 @@ export default function EventForm() {
         sessions: sessionsPayload,
       }
 
-      let eventId = existing?.id
-      if (isNew) {
+      // Simpan ID segera, meski penyimpanan tiket atau formulir nanti gagal.
+      let eventId = isNew ? createdEventId.current : existing?.id
+      if (isNew && !eventId) {
         const res = await partnerApi.createEvent(eventPayload)
         eventId = res.data.id
+        createdEventId.current = eventId
       } else {
         await partnerApi.updateEvent(eventId, eventPayload)
       }
@@ -235,12 +256,18 @@ export default function EventForm() {
           ticketIdByKey.set(String(t._key), t.id)
         } else {
           const res = await partnerApi.createTicketType(ticketPayload)
-          keptIds.push(res.data.id)
-          ticketIdByKey.set(String(t._key), res.data.id)
+          const ticketId = res.data.id
+          setTiket((list) => list.map((row) => row._key === t._key ? { ...row, id: ticketId } : row))
+          setOriginalTicketIds((ids) => [...ids, ticketId])
+          keptIds.push(ticketId)
+          ticketIdByKey.set(String(t._key), ticketId)
         }
       }
       for (const oldId of originalTicketIds) {
-        if (oldId && !keptIds.includes(oldId)) await partnerApi.deleteTicketType(oldId)
+        if (oldId && !keptIds.includes(oldId)) {
+          await partnerApi.deleteTicketType(oldId)
+          setOriginalTicketIds((ids) => ids.filter((ticketId) => ticketId !== oldId))
+        }
       }
 
       // Formulir custom: simpan field sungguhan (create/update/delete) + scope tiket.
@@ -257,16 +284,25 @@ export default function EventForm() {
         }
         if (!f.id) {
           const res = await partnerApi.createFormField({ ...payload, event_id: eventId })
-          keptFieldIds.push(res.data.id)
+          const fieldId = res.data.id
+          setFields((list) => list.map((row) => row._key === f._key ? { ...row, id: fieldId, event_id: eventId } : row))
+          setOriginalFieldIds((ids) => [...ids, fieldId])
+          keptFieldIds.push(fieldId)
         } else {
           const upd = { ...payload }
           if (!f.event_id && targetIds) upd.event_id = eventId // field organizer-level di-scope ke event ini
           await partnerApi.updateFormField(f.id, upd)
+          if (upd.event_id) {
+            setFields((list) => list.map((row) => row._key === f._key ? { ...row, event_id: eventId } : row))
+          }
           keptFieldIds.push(f.id)
         }
       }
       for (const oldId of originalFieldIds) {
-        if (oldId && !keptFieldIds.includes(oldId)) await partnerApi.deleteFormField(oldId)
+        if (oldId && !keptFieldIds.includes(oldId)) {
+          await partnerApi.deleteFormField(oldId)
+          setOriginalFieldIds((ids) => ids.filter((fieldId) => fieldId !== oldId))
+        }
       }
 
       await reloadFields() // sinkronkan state fields dengan data terbaru dari server
@@ -278,6 +314,7 @@ export default function EventForm() {
     } catch (err) {
       window.alert(err.message)
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }
@@ -349,7 +386,7 @@ export default function EventForm() {
     if (!draft) return daftar
     return daftar
       .map((t) => (t._key === draft._key
-        ? ((draft.nama_tiket || '').trim() ? { ...draft, nama_tiket: draft.nama_tiket.trim() } : t)
+        ? ((draft.nama_tiket || '').trim() ? { ...draft, id: t.id, nama_tiket: draft.nama_tiket.trim() } : t)
         : t))
       .filter((t) => (t.nama_tiket || '').trim() || t.id)
   }
@@ -362,7 +399,7 @@ export default function EventForm() {
     if (eventSessions.length > 0 && ticketSessionIds(draft).length === 0) {
       return alert('Pilih minimal 1 sesi — tanpa sesi, QR tiket ini tidak bisa dipakai check-in.')
     }
-    setTiket((list) => list.map((t) => (t._key === draft._key ? { ...draft, nama_tiket: nama } : t)))
+    setTiket((list) => list.map((t) => (t._key === draft._key ? { ...draft, id: t.id, nama_tiket: nama } : t)))
     setTiketModal(null)
     setDraft(null)
   }

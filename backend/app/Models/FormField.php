@@ -40,14 +40,14 @@ class FormField extends Model
 
     public function appliesToTicket(int $ticketId): bool
     {
-        $targets = $this->targetTicketIds();
-
-        return $targets === [] || in_array($ticketId, $targets, true);
+        return ($this->ticket_type_ids === null && $this->ticket_type_id === null)
+            || in_array($ticketId, $this->targetTicketIds(), true);
     }
 
     public function scopeActiveForEvent(Builder $query, Event $event): Builder
     {
         return $query->where('status', 'aktif')
+            ->where(fn (Builder $fields) => $fields->whereNull('ticket_type_ids')->orWhereJsonLength('ticket_type_ids', '>', 0))
             ->where(function (Builder $fields) use ($event) {
                 $fields->where('event_id', $event->id)
                     ->orWhere(function (Builder $organizerFields) use ($event) {

@@ -6,7 +6,9 @@ use App\Models\Event;
 use App\Models\FormField;
 use App\Models\TicketType;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class FormFieldController extends PartnerController
 {
@@ -27,17 +29,19 @@ class FormFieldController extends PartnerController
             'tipe' => ['required', 'in:teks,email,nomor,sosial'],
             'wajib' => ['nullable', 'boolean'],
             'urutan' => ['nullable', 'integer', 'min:1'],
-            'event_id' => ['nullable', 'exists:events,id'],
+            'event_id' => ['bail', 'nullable', 'integer', 'exists:events,id'],
             ...$this->ticketTargetRules(),
         ]);
 
         $data = $this->normalizeTicketTargets($data);
-        $this->authorizeTargets($request, $data);
-
         $data['key'] = Str::slug($data['label'], '_') ?: 'field';
         $data['organizer_id'] = $this->organizerId($request);
 
-        $field = FormField::create($data);
+        $field = DB::transaction(function () use ($request, $data) {
+            $this->authorizeTargets($request, $data);
+
+            return FormField::create($data);
+        });
 
         return response()->json(['data' => $field->refresh()], 201);
     }
@@ -52,18 +56,20 @@ class FormFieldController extends PartnerController
             'wajib' => ['nullable', 'boolean'],
             'urutan' => ['nullable', 'integer', 'min:1'],
             'status' => ['nullable', 'in:aktif,nonaktif'],
-            'event_id' => ['nullable', 'exists:events,id'],
+            'event_id' => ['bail', 'nullable', 'integer', 'exists:events,id'],
             ...$this->ticketTargetRules(),
         ]);
 
         $data = $this->normalizeTicketTargets($data);
-        $this->authorizeTargets($request, $data + $formField->only(['event_id', 'ticket_type_id', 'ticket_type_ids']));
 
         if (array_key_exists('label', $data)) {
             $data['key'] = Str::slug($data['label'], '_') ?: 'field';
         }
 
-        $formField->update($data);
+        DB::transaction(function () use ($request, $data, $formField) {
+            $this->authorizeTargets($request, $data + $formField->only(['event_id', 'ticket_type_id', 'ticket_type_ids']));
+            $formField->update($data);
+        });
 
         return response()->json(['data' => $formField->fresh()]);
     }
@@ -112,11 +118,16 @@ class FormFieldController extends PartnerController
             return;
         }
 
+        if ($eventId === null) {
+            throw ValidationException::withMessages(['event_id' => 'Event wajib diisi jika jenis tiket dipilih.']);
+        }
+
+        // Hold the targets until the field write commits so deletion cannot leave a stale JSON reference.
         $tickets = TicketType::whereHas('event', fn ($q) => $q->where('organizer_id', $organizerId))
-            ->whereKey($ids)->get(['id', 'event_id']);
+            ->whereKey($ids)->orderBy('id')->sharedLock()->get(['id', 'event_id']);
         abort_if($tickets->count() !== count($ids), 403, 'Jenis tiket tidak valid.');
         abort_if(
-            $eventId !== null && $tickets->contains(fn ($ticket) => (int) $ticket->event_id !== (int) $eventId),
+            $tickets->contains(fn ($ticket) => (int) $ticket->event_id !== (int) $eventId),
             422, 'Jenis tiket tidak termasuk dalam event tersebut.',
         );
     }

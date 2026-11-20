@@ -7,7 +7,7 @@ import { publicApi } from '../../lib/api'
 import { formatRupiah, formatTanggal, cn } from '../../lib/utils'
 import { useOrder } from '../../context/OrderContext'
 import { paymentProviderLabel, isHostedProvider } from '../../lib/paymentProvider'
-import { checkoutFields } from '../../lib/buyerFields'
+import { checkoutFields, duplicateBuyerField, restoreScopedAnswers } from '../../lib/buyerFields'
 
 const DEFAULT_FIELDS = [
   { id: 'instagram', label: 'Instagram', key: 'instagram', tipe: 'sosial', wajib: false },
@@ -41,13 +41,14 @@ export default function Checkout() {
   const relevantFields = checkoutFields(allFields, items.map((it) => it.ticketId ?? it.id))
   const globalFields = relevantFields.filter(({ ticketId }) => ticketId === null)
 
+  const matchingDraft = draft?.event?.id && draft.event.id === event?.id ? draft : null
   const [form, setForm] = useState({
     nama: '', email: '', whatsapp: '', instagram: '', tiktok: '', threads: '',
-    ...(draft?.buyer || {}),
+    ...restoreScopedAnswers(matchingDraft?.buyer || {}, matchingDraft?.event?.formFields || [], relevantFields),
   })
   const [errors, setErrors] = useState({})
   const [voucherCode, setVoucherCode] = useState('')
-  const [voucher, setVoucher] = useState(draft?.voucher || null)
+  const [voucher, setVoucher] = useState(matchingDraft?.voucher || null)
   const [voucherMsg, setVoucherMsg] = useState(null)
   const [checkoutError, setCheckoutError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -128,6 +129,13 @@ export default function Checkout() {
 
   const handleCheckout = async () => {
     setCheckoutError(null)
+    const duplicate = duplicateBuyerField(relevantFields.map(({ field, ticketId, inputKey }) => ({
+      label: field.label, ticketKeys: ticketId === null ? null : [ticketId], inputKey,
+    })))
+    if (duplicate) {
+      setCheckoutError(`Kolom “${duplicate}” terdaftar dua kali untuk pesanan ini. Hubungi penyelenggara sebelum melanjutkan.`)
+      return
+    }
     if (!validate()) return
     updateDraft({ items, event, buyer: form, voucher })
 

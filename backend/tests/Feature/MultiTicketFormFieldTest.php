@@ -65,6 +65,98 @@ class MultiTicketFormFieldTest extends TestCase
             ->assertOk()->assertJsonPath('data.ticket_type_ids', [$b->id]);
     }
 
+    public function test_partner_requires_an_event_for_new_or_retained_ticket_targets(): void
+    {
+        [$user, $organizer] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+        $ticket = $this->createTicketType($event, []);
+        Sanctum::actingAs($user);
+
+        $url = '/api/partner/form-fields';
+        $base = ['label' => 'Club', 'tipe' => 'teks'];
+        foreach ([['ticket_type_ids' => [$ticket->id]], ['ticket_type_id' => $ticket->id]] as $targets) {
+            $this->postJson($url, $base + $targets)->assertUnprocessable()->assertJsonValidationErrors('event_id');
+
+            $id = $this->postJson($url, $base + $targets + ['event_id' => $event->id])->assertCreated()->json('data.id');
+            $this->putJson("$url/$id", ['label' => 'Updated'])->assertOk();
+            $this->putJson("$url/$id", ['event_id' => null])->assertUnprocessable()->assertJsonValidationErrors('event_id');
+            $this->putJson("$url/$id", ['event_id' => null, 'ticket_type_ids' => null])->assertOk()
+                ->assertJsonPath('data.event_id', null)->assertJsonPath('data.ticket_type_id', null)
+                ->assertJsonPath('data.ticket_type_ids', null);
+        }
+    }
+
+    public function test_eventless_legacy_fields_can_be_repaired_or_have_their_scope_cleared(): void
+    {
+        [$user, $organizer] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+        $otherEvent = $this->createEvent($organizer);
+        $ticket = $this->createTicketType($event, []);
+        Sanctum::actingAs($user);
+
+        foreach ([['ticket_type_id' => $ticket->id], ['ticket_type_ids' => [$ticket->id]]] as $targets) {
+            $field = $this->field($event, ['event_id' => null] + $targets);
+            $url = "/api/partner/form-fields/{$field->id}";
+            $this->putJson($url, ['label' => 'Updated'])->assertUnprocessable()->assertJsonValidationErrors('event_id');
+            $this->putJson($url, ['event_id' => $otherEvent->id])->assertUnprocessable();
+            $this->putJson($url, ['event_id' => $event->id])->assertOk()->assertJsonPath('data.event_id', $event->id);
+
+            $field = $this->field($event, ['event_id' => null] + $targets);
+            $this->putJson("/api/partner/form-fields/{$field->id}", ['ticket_type_ids' => null])->assertOk()
+                ->assertJsonPath('data.event_id', null)->assertJsonPath('data.ticket_type_id', null)
+                ->assertJsonPath('data.ticket_type_ids', null);
+        }
+    }
+
+    public function test_ticket_type_can_be_updated_but_cannot_move_to_another_event(): void
+    {
+        [$user, $organizer] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+        $otherEvent = $this->createEvent($organizer);
+        [, $foreignOrganizer] = $this->createPartner();
+        $foreignEvent = $this->createEvent($foreignOrganizer);
+        $ticket = $this->createTicketType($event, []);
+        Sanctum::actingAs($user);
+
+        $url = "/api/partner/ticket-types/{$ticket->id}";
+        $this->putJson($url, ['event_id' => (string) $event->id, 'nama_tiket' => 'Updated'])->assertOk();
+        foreach ([$otherEvent, $foreignEvent] as $target) {
+            $this->putJson($url, ['event_id' => $target->id, 'nama_tiket' => 'Moved'])
+                ->assertUnprocessable()->assertJsonValidationErrors('event_id');
+        }
+        $this->assertDatabaseHas('ticket_types', ['id' => $ticket->id, 'event_id' => $event->id, 'nama_tiket' => 'Updated']);
+    }
+
+    public function test_ticket_deletion_prunes_targets_without_turning_fields_into_all_ticket_fields(): void
+    {
+        [$user, $organizer] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+        $a = $this->createTicketType($event, []);
+        $b = $this->createTicketType($event, []);
+        $c = $this->createTicketType($event, []);
+        $multi = $this->field($event, ['ticket_type_ids' => [$a->id, $b->id]]);
+        $single = $this->field($event, ['ticket_type_ids' => [$a->id]]);
+        $legacy = $this->field($event, ['ticket_type_id' => $a->id]);
+        $wide = $this->field($event, []);
+        Sanctum::actingAs($user);
+
+        $this->deleteJson("/api/partner/ticket-types/{$a->id}")->assertOk();
+        $this->assertModelMissing($a);
+        $this->assertSame([$b->id], $multi->fresh()->ticket_type_ids);
+        foreach ([$single, $legacy] as $field) {
+            $this->assertSame([], $field->fresh()->ticket_type_ids);
+            $this->assertNull($field->fresh()->ticket_type_id);
+        }
+        $eventUrl = "/api/events/{$event->slug}";
+        $this->assertSame([$multi->id, $wide->id], array_column($this->getJson($eventUrl)->assertOk()->json('data.formFields'), 'id'));
+        $this->assertSame([$wide->id], array_column($this->getJson("$eventUrl/tiket/{$c->slug}")->assertOk()->json('data.formFields'), 'id'));
+
+        $this->putJson("/api/partner/form-fields/{$single->id}", ['label' => 'Still editable'])->assertOk();
+        $this->deleteJson("/api/partner/ticket-types/{$b->id}")->assertOk();
+        $this->assertSame([], $multi->fresh()->ticket_type_ids);
+        $this->assertSame([$wide->id], array_column($this->getJson($eventUrl)->assertOk()->json('data.formFields'), 'id'));
+    }
+
     public function test_public_event_exposes_scopes_and_direct_checkout_filters_by_ticket(): void
     {
         [, $organizer] = $this->createPartner();

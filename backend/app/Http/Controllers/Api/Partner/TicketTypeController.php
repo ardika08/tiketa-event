@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Partner;
 
 use App\Http\Resources\TicketTypeResource;
 use App\Models\Event;
+use App\Models\FormField;
 use App\Models\TicketType;
 use App\Support\StockLedger;
 use Illuminate\Http\Request;
@@ -60,6 +61,10 @@ class TicketTypeController extends PartnerController
         $this->authorizeTicket($request, $ticketType);
 
         $data = $this->validated($request, partial: true);
+        if (array_key_exists('event_id', $data) && (int) $data['event_id'] !== (int) $ticketType->event_id) {
+            throw ValidationException::withMessages(['event_id' => 'Jenis tiket tidak bisa dipindahkan ke event lain.']);
+        }
+        unset($data['event_id']);
 
         $kuotaLama = $ticketType->kuota;
         $sisaLama = $ticketType->sisa_kuota;
@@ -119,7 +124,24 @@ class TicketTypeController extends PartnerController
             ], 409);
         }
 
-        $ticketType->delete();
+        DB::transaction(function () use ($ticketType) {
+            $ticketType = TicketType::whereKey($ticketType->id)->lockForUpdate()->firstOrFail();
+            $ticketId = (int) $ticketType->id;
+
+            $fields = FormField::whereJsonContains('ticket_type_ids', $ticketId)
+                ->orWhere(fn ($query) => $query->whereNull('ticket_type_ids')->where('ticket_type_id', $ticketId))
+                ->lockForUpdate()->get();
+
+            foreach ($fields as $field) {
+                $field->update([
+                    'ticket_type_id' => null,
+                    // [] matches no tickets; null would make the field apply to all tickets.
+                    'ticket_type_ids' => array_values(array_diff($field->targetTicketIds(), [$ticketId])),
+                ]);
+            }
+
+            $ticketType->delete();
+        }, 3);
 
         return response()->json(['message' => 'Jenis tiket dihapus.']);
     }
@@ -179,7 +201,7 @@ class TicketTypeController extends PartnerController
         $required = $partial ? 'sometimes' : 'required';
 
         return $request->validate([
-            'event_id' => [$partial ? 'sometimes' : 'required', 'exists:events,id'],
+            'event_id' => ['bail', $required, 'integer', 'exists:events,id'],
             'nama_tiket' => [$required, 'string', 'max:150'],
             'harga' => [$required, 'numeric', 'min:0'],
             'kuota' => [$required, 'integer', 'min:1'],
