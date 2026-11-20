@@ -51,7 +51,7 @@ class VoucherService
             throw ValidationException::withMessages(['kode' => 'Voucher ini tidak berlaku untuk tiket yang dipilih.']);
         }
 
-        return $this->discountForSubtotal($voucher, $subtotal, enforceMinimum: $targets !== null);
+        return $this->discountForSubtotal($voucher, $subtotal);
     }
 
     public function discountForLegacySubtotal(Voucher $voucher, float $subtotal): ?float
@@ -63,9 +63,9 @@ class VoucherService
         return $subtotal > 0 ? $this->discountForSubtotal($voucher, $subtotal) : null;
     }
 
-    private function discountForSubtotal(Voucher $voucher, float $subtotal, bool $enforceMinimum = false): float
+    private function discountForSubtotal(Voucher $voucher, float $subtotal): float
     {
-        if (($enforceMinimum || $subtotal > 0) && ! $voucher->minPembelianTerpenuhi($subtotal)) {
+        if (! $voucher->minPembelianTerpenuhi($subtotal)) {
             $minFormatted = 'Rp ' . number_format((float) $voucher->min_pembelian, 0, ',', '.');
             throw ValidationException::withMessages([
                 'kode' => "Voucher ini berlaku untuk minimal pembelian {$minFormatted}.",

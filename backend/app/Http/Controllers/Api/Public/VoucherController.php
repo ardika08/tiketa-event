@@ -24,7 +24,10 @@ class VoucherController extends Controller
         $event = Event::findOrFail($data['event_id']);
         $voucher = $service->resolve($data['kode'], $event);
 
+        $quote = [];
         if (isset($data['items'])) {
+            $subtotal = 0.0;
+            $prices = [];
             $tickets = $event->ticketTypes()->where('status', 'aktif')
                 ->whereKey(array_column($data['items'], 'ticket_type_id'))->get()->keyBy('id');
             $items = [];
@@ -34,9 +37,14 @@ class VoucherController extends Controller
                     throw ValidationException::withMessages(['items' => 'Jenis tiket tidak tersedia pada event ini.']);
                 }
 
-                $items[] = [$ticket, (int) $item['jumlah']];
+                $quantity = (int) $item['jumlah'];
+                $price = (float) $ticket->harga;
+                $items[] = [$ticket, $quantity];
+                $prices[$ticket->id] = $price;
+                $subtotal += $price * $quantity;
             }
             $diskon = $service->discountForItems($voucher, $items);
+            $quote = ['subtotal' => $subtotal, 'total_harga' => $subtotal - $diskon, 'harga_tiket' => $prices];
         } else {
             $diskon = $service->discountForLegacySubtotal($voucher, (float) ($data['subtotal'] ?? 0));
         }
@@ -47,6 +55,7 @@ class VoucherController extends Controller
             'nilai' => (float) $voucher->nilai,
             'min_pembelian' => (float) $voucher->min_pembelian,
             'diskon' => $diskon,
+            ...$quote,
         ]);
     }
 }

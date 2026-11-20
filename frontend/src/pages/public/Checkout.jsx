@@ -66,7 +66,7 @@ export default function Checkout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const subtotal = useMemo(() => items.reduce((s, it) => s + it.harga * it.jumlah, 0), [items])
+  const cartSubtotal = useMemo(() => items.reduce((s, it) => s + it.harga * it.jumlah, 0), [items])
 
   useEffect(() => {
     if (voucherQuote && !voucher) {
@@ -76,8 +76,10 @@ export default function Checkout() {
     }
   }, [voucherQuote, voucher])
 
+  const subtotal = voucher?.subtotal ?? cartSubtotal
   const diskon = Math.min(subtotal, Number(voucher?.diskon) || 0)
-  const total = subtotal - diskon
+  const total = voucher?.total_harga ?? subtotal - diskon
+  const ticketPrice = (item) => voucher?.harga_tiket?.[item.ticketId ?? item.id] ?? item.harga
 
   if (!event || items.length === 0) {
     return (
@@ -328,9 +330,9 @@ export default function Checkout() {
                     <div key={it.id} className="flex items-start justify-between gap-3 text-sm">
                       <div>
                         <p className="font-medium text-slate-700">{it.nama_tiket}</p>
-                        <p className="text-xs text-slate-500">{formatRupiah(it.harga)} × {it.jumlah}</p>
+                        <p className="text-xs text-slate-500">{formatRupiah(ticketPrice(it))} × {it.jumlah}</p>
                       </div>
-                      <p className="font-semibold text-slate-800">{formatRupiah(it.harga * it.jumlah)}</p>
+                      <p className="font-semibold text-slate-800">{formatRupiah(ticketPrice(it) * it.jumlah)}</p>
                     </div>
                   ))}
                   {sessionItems.map((it) => {

@@ -80,7 +80,7 @@ export default function MasterVouchers() {
   const handleFormChange = (key, val) => {
     setForm((prev) => ({
       ...prev,
-      ...(key === 'event_id' && prev.event_id !== val ? { ticket_type_ids: null } : {}),
+      ...(key === 'event_id' && prev.event_id !== val && prev.ticket_type_ids !== null ? { ticket_type_ids: [] } : {}),
       [key]: key === 'kode' ? val.toUpperCase().replace(/\s+/g, '') : val,
     }))
   }
@@ -392,7 +392,7 @@ export default function MasterVouchers() {
           </Field>
 
           <Field label="Target Tiket" hint={form.event_id ? undefined : 'Pilih satu event untuk membatasi voucher ke tiket tertentu.'}>
-            <Select aria-label="Target Tiket" disabled={!form.event_id} value={form.ticket_type_ids === null ? 'all' : 'selected'}
+            <Select aria-label="Target Tiket" disabled={!form.event_id && form.ticket_type_ids === null} value={form.ticket_type_ids === null ? 'all' : 'selected'}
               onChange={(e) => handleFormChange('ticket_type_ids', e.target.value === 'all' ? null : [])}>
               <option value="all">{form.event_id ? 'Semua tiket di event ini' : 'Semua tiket'}</option>
               <option value="selected">Tiket tertentu</option>

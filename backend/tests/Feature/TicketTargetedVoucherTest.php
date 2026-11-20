@@ -143,6 +143,30 @@ class TicketTargetedVoucherTest extends TestCase
             ->assertOk()->assertJsonPath('diskon', 40000);
     }
 
+    public function test_quote_uses_current_price_for_lines_subtotal_and_total(): void
+    {
+        [$event, $eligible, $ineligible] = $this->scenario();
+        $eligible->update(['harga' => 150000]);
+
+        $this->preview($event, [$this->item($eligible), $this->item($ineligible)])
+            ->assertOk()->assertJsonPath('subtotal', 450000)
+            ->assertJsonPath('diskon', 15000)->assertJsonPath('total_harga', 435000)
+            ->assertJsonPath("harga_tiket.{$eligible->id}", 150000);
+    }
+
+    public function test_free_cart_cannot_consume_an_unscoped_voucher_with_positive_minimum(): void
+    {
+        [$event, $eligible, , $voucher] = $this->scenario(['ticket_type_ids' => null, 'min_pembelian' => 1000]);
+        $eligible->update(['harga' => 0]);
+        $items = [$this->item($eligible)];
+
+        $this->preview($event, $items)->assertUnprocessable()->assertJsonValidationErrors('kode');
+        $this->checkout($event, $items)->assertUnprocessable()->assertJsonValidationErrors('kode');
+        $this->assertSame(0, $voucher->fresh()->terpakai);
+        $this->postJson('/api/vouchers/validate', ['event_id' => $event->id, 'kode' => 'TARGET', 'subtotal' => 0])
+            ->assertOk()->assertJsonPath('diskon', null);
+    }
+
     private function voucherPayload(): array
     {
         return ['kode' => 'TARGET', 'tipe_diskon' => 'persen', 'nilai' => 10, 'status' => 'aktif'];
