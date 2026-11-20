@@ -75,6 +75,7 @@ class EventResource extends JsonResource
                     'wajib' => (bool) $f->wajib,
                     'urutan' => $f->urutan,
                     'ticket_type_id' => $f->ticket_type_id,
+                    'ticket_type_ids' => $f->ticket_type_ids,
                 ])),
             'total_sisa_kuota' => $this->whenLoaded('ticketTypes', function () {
                 $q = $this->ticketTypes;

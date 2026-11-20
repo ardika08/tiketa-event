@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\Public;
 
+use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\OrderResource;
 use App\Models\Event;
 use App\Models\FormField;
 use App\Models\Order;
-use App\Enums\PaymentStatus;
 use App\Services\OrderService;
 use App\Services\PaymentManager;
 use Illuminate\Http\Request;
@@ -34,49 +34,36 @@ class OrderController extends Controller
 
         $event = Event::active()->findOrFail($data['event_id']);
 
-        // Validasi server-side field form custom: field berstatus wajib tidak
-        // boleh dikosongkan (juga lewat API mentah). Field khusus jenis tiket
-        // hanya divalidasi bila tiket tersebut benar-benar dipesan.
-        $fields = FormField::query()
-            ->where('status', 'aktif')
-            ->where(function ($q) use ($event) {
-                $q->where('event_id', $event->id)
-                    ->orWhere(function ($qq) use ($event) {
-                        $qq->whereNull('event_id')->where('organizer_id', $event->organizer_id);
-                    });
-            })
-            ->get();
-
         $orderedTicketIds = collect($data['items'])
             ->pluck('ticket_type_id')
-            ->map(fn ($id) => (int) $id);
+            ->map(fn ($id) => (int) $id)
+            ->unique();
         $orderAnswers = $data['form_data']['order'] ?? [];
         $ticketAnswers = $data['form_data']['tickets'] ?? [];
         $fieldErrors = [];
 
-        foreach ($fields as $field) {
-            if ($field->ticket_type_id && ! $orderedTicketIds->contains((int) $field->ticket_type_id)) {
+        foreach (FormField::activeForEvent($event)->where('wajib', true)->get() as $field) {
+            if ($field->targetTicketIds() === []) {
+                $key = strtolower($field->key ?: $field->label);
+                $value = $this->fieldAnswer($field, $orderAnswers);
+                if (in_array($key, ['instagram', 'tiktok', 'threads'], true)) {
+                    $value = $value ?: ($data[$key] ?? null);
+                }
+                if (! $this->hasAnswer($value)) {
+                    $fieldErrors["form_data.{$field->id}"] = "{$field->label} wajib diisi.";
+                }
+
                 continue;
             }
 
-            $answers = $field->ticket_type_id
-                ? ($ticketAnswers[(string) $field->ticket_type_id] ?? [])
-                : $orderAnswers;
-
-            // Cari nilai jawaban berdasarkan label asli, label lowercase, atau key
-            $key = strtolower($field->key ?: $field->label);
-            $value = $answers[$field->label]
-                ?? $answers[$field->key ?? '']
-                ?? ($answers[$key] ?? null)
-                ?? ($answers[strtolower($field->label)] ?? null);
-
-            // Jika field order-level adalah sosial standar, fallback ke kolom root order (data.instagram, dll)
-            if (! $field->ticket_type_id && in_array($key, ['instagram', 'tiktok', 'threads'], true)) {
-                $value = $value ?: ($data[$key] ?? null);
-            }
-
-            if ($field->wajib && ($value === null || trim((string) $value) === '')) {
-                $fieldErrors["form_data.{$field->id}"] = "{$field->label} wajib diisi.";
+            foreach ($orderedTicketIds as $ticketId) {
+                if ($field->appliesToTicket($ticketId)
+                    && ! $this->hasAnswer($this->fieldAnswer($field, $ticketAnswers[$ticketId] ?? []))) {
+                    $errorKey = $field->ticket_type_ids === null
+                        ? "form_data.{$field->id}"
+                        : "form_data.tickets.{$ticketId}.{$field->id}";
+                    $fieldErrors[$errorKey] = "{$field->label} wajib diisi.";
+                }
             }
         }
 
@@ -129,6 +116,24 @@ class OrderController extends Controller
         return (new OrderResource($order->fresh($orders->relations())))
             ->response()
             ->setStatusCode(201);
+    }
+
+    private function fieldAnswer(FormField $field, mixed $answers): mixed
+    {
+        if (! is_array($answers)) {
+            return null;
+        }
+
+        return $answers[$field->label]
+            ?? $answers[$field->key ?? '']
+            ?? $answers[strtolower($field->key ?: $field->label)]
+            ?? $answers[strtolower($field->label)]
+            ?? null;
+    }
+
+    private function hasAnswer(mixed $value): bool
+    {
+        return is_scalar($value) && trim((string) $value) !== '';
     }
 
     public function show(string $kodeOrder, OrderService $orders)

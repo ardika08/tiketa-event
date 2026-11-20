@@ -29,22 +29,10 @@ class EventController extends Controller
         $event = Event::query()
             ->active()
             ->where('slug', $slug)
-            ->with(['organizer', 'sessions', 'ticketTypes.sessions', 'seatPlan', 'formFields'])
+            ->with(['organizer', 'sessions', 'ticketTypes.sessions', 'seatPlan'])
             ->firstOrFail();
 
-        // Field organizer-level (event_id NULL) berlaku untuk semua event milik
-        // organizer ini — digabung dengan field spesifik event, urut sesuai `urutan`.
-        $organizerFields = FormField::where('organizer_id', $event->organizer_id)
-            ->whereNull('event_id')
-            ->whereNull('ticket_type_id') // field khusus tiket tidak relevan di level organizer
-            ->where('status', 'aktif')
-            ->orderBy('urutan')
-            ->get();
-
-        $event->setRelation(
-            'formFields',
-            $event->formFields->concat($organizerFields)->sortBy('urutan')->values(),
-        );
+        $event->setRelation('formFields', FormField::activeForEvent($event)->get());
 
         return new EventResource($event);
     }
@@ -61,7 +49,7 @@ class EventController extends Controller
         $event = Event::query()
             ->active()
             ->where('slug', $slug)
-            ->with(['organizer', 'sessions', 'seatPlan', 'formFields'])
+            ->with(['organizer', 'sessions', 'seatPlan'])
             ->firstOrFail();
 
         $ticket = $event->ticketTypes()
@@ -76,30 +64,10 @@ class EventController extends Controller
         // (tiket sembunyi justru boleh dibuka lewat link langsung).
         $request->attributes->set('checkout_tiket', true);
 
-        $organizerFields = FormField::where('organizer_id', $event->organizer_id)
-            ->whereNull('event_id')
-            ->whereNull('ticket_type_id')
-            ->where('status', 'aktif')
-            ->orderBy('urutan')
-            ->get();
-
-        // Field khusus tiket ini tetap dipakai walau event-level tidak dimuat,
-        // karena checkout butuh semua pertanyaan yang relevan.
-        $ticketFields = FormField::where('event_id', $event->id)
-            ->where('ticket_type_id', $ticket->id)
-            ->where('status', 'aktif')
-            ->orderBy('urutan')
-            ->get();
-
-        $eventFields = FormField::where('event_id', $event->id)
-            ->whereNull('ticket_type_id')
-            ->where('status', 'aktif')
-            ->orderBy('urutan')
-            ->get();
-
         $event->setRelation(
             'formFields',
-            $eventFields->concat($ticketFields)->concat($organizerFields)->sortBy('urutan')->values(),
+            FormField::activeForEvent($event)->get()
+                ->filter(fn (FormField $field) => $field->appliesToTicket($ticket->id))->values(),
         );
         $event->setRelation('ticketTypes', collect([$ticket]));
 

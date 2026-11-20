@@ -28,9 +28,10 @@ class FormFieldController extends PartnerController
             'wajib' => ['nullable', 'boolean'],
             'urutan' => ['nullable', 'integer', 'min:1'],
             'event_id' => ['nullable', 'exists:events,id'],
-            'ticket_type_id' => ['nullable', 'exists:ticket_types,id'],
+            ...$this->ticketTargetRules(),
         ]);
 
+        $data = $this->normalizeTicketTargets($data);
         $this->authorizeTargets($request, $data);
 
         $data['key'] = Str::slug($data['label'], '_') ?: 'field';
@@ -38,7 +39,7 @@ class FormFieldController extends PartnerController
 
         $field = FormField::create($data);
 
-        return response()->json(['data' => $field], 201);
+        return response()->json(['data' => $field->refresh()], 201);
     }
 
     public function update(Request $request, FormField $formField)
@@ -52,10 +53,11 @@ class FormFieldController extends PartnerController
             'urutan' => ['nullable', 'integer', 'min:1'],
             'status' => ['nullable', 'in:aktif,nonaktif'],
             'event_id' => ['nullable', 'exists:events,id'],
-            'ticket_type_id' => ['nullable', 'exists:ticket_types,id'],
+            ...$this->ticketTargetRules(),
         ]);
 
-        $this->authorizeTargets($request, $data);
+        $data = $this->normalizeTicketTargets($data);
+        $this->authorizeTargets($request, $data + $formField->only(['event_id', 'ticket_type_id', 'ticket_type_ids']));
 
         if (array_key_exists('label', $data)) {
             $data['key'] = Str::slug($data['label'], '_') ?: 'field';
@@ -74,27 +76,48 @@ class FormFieldController extends PartnerController
         return response()->json(['message' => 'Field dihapus.']);
     }
 
-    /**
-     * Field hanya boleh menunjuk ke event/tiket milik organizer yang sama.
-     * ticket_type_id wajib satu event dengan event_id field (bila keduanya terisi).
-     */
+    private function ticketTargetRules(): array
+    {
+        return [
+            'ticket_type_id' => ['nullable', 'integer', 'exists:ticket_types,id'],
+            'ticket_type_ids' => ['nullable', 'array', 'list', 'min:1'],
+            'ticket_type_ids.*' => ['bail', 'required', 'integer', 'distinct', 'exists:ticket_types,id'],
+        ];
+    }
+
+    private function normalizeTicketTargets(array $data): array
+    {
+        if (array_key_exists('ticket_type_ids', $data)) {
+            $data['ticket_type_id'] = null;
+            $data['ticket_type_ids'] = $data['ticket_type_ids'] === null
+                ? null : array_map('intval', $data['ticket_type_ids']);
+        } elseif (array_key_exists('ticket_type_id', $data)) {
+            $data['ticket_type_ids'] = null;
+        }
+
+        return $data;
+    }
+
     private function authorizeTargets(Request $request, array $data): void
     {
         $organizerId = $this->organizerId($request);
-
-        if (! empty($data['event_id'])) {
-            $owned = Event::where('organizer_id', $organizerId)->whereKey($data['event_id'])->exists();
+        $eventId = $data['event_id'] ?? null;
+        if ($eventId !== null) {
+            $owned = Event::where('organizer_id', $organizerId)->whereKey($eventId)->exists();
             abort_if(! $owned, 403, 'Event tidak valid.');
         }
 
-        if (! empty($data['ticket_type_id'])) {
-            $ticketType = TicketType::whereHas('event', fn ($q) => $q->where('organizer_id', $organizerId))
-                ->find($data['ticket_type_id']);
-            abort_if(! $ticketType, 403, 'Jenis tiket tidak valid.');
-
-            if (! empty($data['event_id']) && (int) $ticketType->event_id !== (int) $data['event_id']) {
-                abort(422, 'Jenis tiket tidak termasuk dalam event tersebut.');
-            }
+        $ids = $data['ticket_type_ids'] ?? (isset($data['ticket_type_id']) ? [$data['ticket_type_id']] : []);
+        if ($ids === []) {
+            return;
         }
+
+        $tickets = TicketType::whereHas('event', fn ($q) => $q->where('organizer_id', $organizerId))
+            ->whereKey($ids)->get(['id', 'event_id']);
+        abort_if($tickets->count() !== count($ids), 403, 'Jenis tiket tidak valid.');
+        abort_if(
+            $eventId !== null && $tickets->contains(fn ($ticket) => (int) $ticket->event_id !== (int) $eventId),
+            422, 'Jenis tiket tidak termasuk dalam event tersebut.',
+        );
     }
 }

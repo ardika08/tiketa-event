@@ -50,6 +50,45 @@ const TABS = [
   { id: 'staff', label: 'Staff' },
 ]
 
+function TicketScopePicker({ field, tickets, onChange }) {
+  const keys = field.ticket_keys
+  const options = tickets.filter((ticket) => ticket.nama_tiket)
+  const selected = options.filter((ticket) => keys?.includes(String(ticket._key)))
+  let summary = 'Pilih tiket'
+  if (keys === null) summary = 'Semua tiket'
+  else if (selected.length === 1) summary = selected[0].nama_tiket
+  else if (selected.length) summary = `${selected.length} tiket dipilih`
+
+  return (
+    <details className="w-full max-w-[250px] rounded-xl border border-slate-200 bg-white text-sm text-slate-700">
+      <summary className="cursor-pointer break-words px-3 py-2.5 font-medium focus-visible:ring-2 focus-visible:ring-brand-500" aria-label={`${summary} — cakupan ${field.label}`}>
+        {summary}
+      </summary>
+      <fieldset className="space-y-2 border-t border-slate-100 p-3">
+        <legend className="sr-only">Tiket untuk {field.label}</legend>
+        <div className="flex flex-wrap gap-x-3 gap-y-1">
+          <button type="button" onClick={() => onChange(null)} aria-pressed={keys === null} className="min-h-6 font-semibold text-brand-700 underline">Semua tiket</button>
+          {options.length > 0 && (
+            <button type="button" onClick={() => onChange(options.map((ticket) => String(ticket._key)))} className="min-h-6 font-semibold text-brand-700 underline">Centang semua yang ada</button>
+          )}
+        </div>
+        <div className="max-h-56 overflow-y-auto">
+          {options.map((ticket) => {
+            const key = String(ticket._key)
+            return (
+              <label key={key} className="flex min-h-7 cursor-pointer items-center gap-2 py-0.5">
+                <input type="checkbox" checked={keys?.includes(key) ?? false} onChange={(e) =>
+                  onChange(e.target.checked ? [...(keys ?? []), key] : keys.filter((id) => id !== key))} />
+                <span className="min-w-0 break-words">{ticket.nama_tiket}</span>
+              </label>
+            )
+          })}
+        </div>
+      </fieldset>
+    </details>
+  )
+}
+
 export default function EventForm() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -100,7 +139,11 @@ export default function EventForm() {
     if (!fieldsData) return
     // Hanya field milik event ini + field organizer-level (event_id NULL).
     const mine = (fieldsData.data || []).filter((f) => !f.event_id || f.event_id === existing?.id)
-    setFields(mine.map((f) => ({ ...f, ticket_key: f.ticket_type_id ?? null, _key: f.id })))
+    setFields(mine.map((f) => ({
+      ...f,
+      ticket_keys: f.ticket_type_ids?.map(String) ?? (f.ticket_type_id == null ? null : [String(f.ticket_type_id)]),
+      _key: f.id,
+    })))
     setOriginalFieldIds(mine.map((f) => f.id))
   }, [fieldsData, existing?.id])
 
@@ -111,6 +154,14 @@ export default function EventForm() {
     // Tanpa ini, perubahan terakhir partner hilang tanpa peringatan.
     const tiketFinal = gabungDraft(tiket)
     if (draft) { setTiketModal(null); setDraft(null) }
+
+    const namedTicketKeys = new Set(tiketFinal.filter((t) => t.nama_tiket).map((t) => String(t._key)))
+    const unassignedField = fields.find((f) => f.ticket_keys !== null && !f.ticket_keys.some((key) => namedTicketKeys.has(key)))
+    if (unassignedField) {
+      setTab('form')
+      window.alert(`Pilih minimal satu tiket untuk “${unassignedField.label}”, atau ubah menjadi Semua tiket.`)
+      return
+    }
 
     // FASE 3: kategori tiket wajib punya minimal 1 sesi. Kategori tanpa sesi
     // menghasilkan QR yang tidak bisa dipakai check-in di gate mana pun.
@@ -164,6 +215,7 @@ export default function EventForm() {
       }
 
       const keptIds = []
+      const ticketIdByKey = new Map()
       for (const t of tiketFinal) {
         if (!t.nama_tiket) continue
         const ticketPayload = {
@@ -180,9 +232,11 @@ export default function EventForm() {
         if (t.id) {
           await partnerApi.updateTicketType(t.id, ticketPayload)
           keptIds.push(t.id)
+          ticketIdByKey.set(String(t._key), t.id)
         } else {
           const res = await partnerApi.createTicketType(ticketPayload)
           keptIds.push(res.data.id)
+          ticketIdByKey.set(String(t._key), res.data.id)
         }
       }
       for (const oldId of originalTicketIds) {
@@ -190,25 +244,23 @@ export default function EventForm() {
       }
 
       // Formulir custom: simpan field sungguhan (create/update/delete) + scope tiket.
-      const ticketIdByKey = new Map(tiketFinal.map((t) => [String(t._key), t.id]))
       const keptFieldIds = []
       let fieldUrutan = 1
       for (const f of fields.filter((x) => !x.event_id || x.event_id === eventId)) {
-        const targetId = f.ticket_key ? ticketIdByKey.get(String(f.ticket_key)) : null
-        if (f.ticket_key && !targetId) continue // tiket referensinya sudah dihapus
+        const targetIds = f.ticket_keys?.filter((key) => ticketIdByKey.has(key)).map((key) => ticketIdByKey.get(key)) ?? null
         const payload = {
           label: (f.label || '').trim() || 'Field Baru',
           tipe: f.tipe || 'teks',
           wajib: !!f.wajib,
           urutan: fieldUrutan++,
-          ticket_type_id: targetId ?? null,
+          ticket_type_ids: targetIds,
         }
         if (!f.id) {
           const res = await partnerApi.createFormField({ ...payload, event_id: eventId })
           keptFieldIds.push(res.data.id)
         } else {
           const upd = { ...payload }
-          if (!f.event_id && targetId) upd.event_id = eventId // field organizer-level di-scope ke event ini
+          if (!f.event_id && targetIds) upd.event_id = eventId // field organizer-level di-scope ke event ini
           await partnerApi.updateFormField(f.id, upd)
           keptFieldIds.push(f.id)
         }
@@ -770,7 +822,7 @@ export default function EventForm() {
               <h2 className="font-bold text-slate-900">Formulir Data Pembeli</h2>
               <p className="text-sm text-slate-500">Pilih data yang wajib/opsional diisi pembeli.</p>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => setFields((l) => [...l, { _key: `new-${Date.now()}`, id: null, event_id: null, label: 'Field Baru', tipe: 'teks', wajib: false, urutan: l.length + 1, ticket_key: null }])}>
+            <Button variant="secondary" size="sm" onClick={() => setFields((l) => [...l, { _key: `new-${Date.now()}`, id: null, event_id: null, label: 'Field Baru', tipe: 'teks', wajib: false, urutan: l.length + 1, ticket_keys: null }])}>
               <Plus size={15} /> Tambah Field
             </Button>
           </div>
@@ -785,12 +837,8 @@ export default function EventForm() {
                   <option value="nomor">Nomor</option>
                   <option value="sosial">Sosial</option>
                 </Select>
-                <Select value={String(f.ticket_key ?? '')} onChange={(e) => setFields((l) => l.map((x) => (x._key === f._key ? { ...x, ticket_key: e.target.value || null } : x)))} className="max-w-[180px]">
-                  <option value="">Semua tiket</option>
-                  {tiket.map((t) => (
-                    <option key={t._key} value={String(t._key)}>{t.nama_tiket || '(tiket baru)'}</option>
-                  ))}
-                </Select>
+                <TicketScopePicker field={f} tickets={tiket} onChange={(keys) =>
+                  setFields((list) => list.map((item) => item._key === f._key ? { ...item, ticket_keys: keys } : item))} />
                 <label className="flex items-center gap-2 text-sm text-slate-600">
                   <input type="checkbox" checked={f.wajib} onChange={(e) => setFields((l) => l.map((x) => (x._key === f._key ? { ...x, wajib: e.target.checked } : x)))} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
                   Wajib

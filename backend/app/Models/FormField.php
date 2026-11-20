@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,7 @@ class FormField extends Model
         'organizer_id',
         'event_id',
         'ticket_type_id',
+        'ticket_type_ids',
         'label',
         'key',
         'tipe',
@@ -26,7 +28,36 @@ class FormField extends Model
     {
         return [
             'wajib' => 'boolean',
+            'ticket_type_ids' => 'array',
         ];
+    }
+
+    /** @return list<int> */
+    public function targetTicketIds(): array
+    {
+        return $this->ticket_type_ids ?? ($this->ticket_type_id === null ? [] : [(int) $this->ticket_type_id]);
+    }
+
+    public function appliesToTicket(int $ticketId): bool
+    {
+        $targets = $this->targetTicketIds();
+
+        return $targets === [] || in_array($ticketId, $targets, true);
+    }
+
+    public function scopeActiveForEvent(Builder $query, Event $event): Builder
+    {
+        return $query->where('status', 'aktif')
+            ->where(function (Builder $fields) use ($event) {
+                $fields->where('event_id', $event->id)
+                    ->orWhere(function (Builder $organizerFields) use ($event) {
+                        $organizerFields->where('organizer_id', $event->organizer_id)
+                            ->whereNull('event_id')
+                            ->whereNull('ticket_type_id')
+                            ->whereNull('ticket_type_ids');
+                    });
+            })
+            ->orderBy('urutan')->orderBy('id');
     }
 
     public function event(): BelongsTo
