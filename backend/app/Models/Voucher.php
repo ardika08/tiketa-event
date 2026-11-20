@@ -12,9 +12,12 @@ class Voucher extends Model
 {
     use HasFactory;
 
+    protected $attributes = ['ticket_type_ids' => null];
+
     protected $fillable = [
         'organizer_id',
         'event_id',
+        'ticket_type_ids',
         'kode',
         'tipe_diskon',
         'nilai',
@@ -29,6 +32,7 @@ class Voucher extends Model
     protected function casts(): array
     {
         return [
+            'ticket_type_ids' => 'array',
             'tipe_diskon' => VoucherType::class,
             'status' => VoucherStatus::class,
             'nilai' => 'decimal:2',

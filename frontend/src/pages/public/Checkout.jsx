@@ -48,7 +48,11 @@ export default function Checkout() {
   })
   const [errors, setErrors] = useState({})
   const [voucherCode, setVoucherCode] = useState('')
-  const [voucher, setVoucher] = useState(matchingDraft?.voucher || null)
+  const orderItems = items.map((it) => ({ ticket_type_id: it.ticketId ?? it.id, jumlah: it.jumlah }))
+  const cartKey = JSON.stringify([event?.id, orderItems.map((item) => [Number(item.ticket_type_id), Number(item.jumlah)]).sort((a, b) => a[0] - b[0] || a[1] - b[1])])
+  const [voucherQuote, setVoucherQuote] = useState(matchingDraft?.voucher || null)
+  const [checkingVoucher, setCheckingVoucher] = useState(false)
+  const voucher = voucherQuote?.cartKey === cartKey ? voucherQuote : null
   const [voucherMsg, setVoucherMsg] = useState(null)
   const [checkoutError, setCheckoutError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -65,20 +69,14 @@ export default function Checkout() {
   const subtotal = useMemo(() => items.reduce((s, it) => s + it.harga * it.jumlah, 0), [items])
 
   useEffect(() => {
-    if (voucher && Number(voucher.min_pembelian) > 0 && subtotal < Number(voucher.min_pembelian)) {
-      setVoucher(null)
-      setVoucherMsg({
-        type: 'error',
-        text: `Voucher ${voucher.kode} dibatalkan karena subtotal belanja kurang dari minimal pembelian.`,
-      })
+    if (voucherQuote && !voucher) {
+      setVoucherQuote(null)
+      setVoucherCode(voucherQuote.kode)
+      setVoucherMsg({ type: 'error', text: 'Keranjang berubah. Pakai ulang voucher untuk menghitung diskon.' })
     }
-  }, [subtotal, voucher])
+  }, [voucherQuote, voucher])
 
-  const diskon = useMemo(() => {
-    if (!voucher) return 0
-    const d = voucher.tipe_diskon === 'persen' ? Math.round((subtotal * voucher.nilai) / 100) : voucher.nilai
-    return Math.min(d, subtotal)
-  }, [voucher, subtotal])
+  const diskon = Math.min(subtotal, Number(voucher?.diskon) || 0)
   const total = subtotal - diskon
 
   if (!event || items.length === 0) {
@@ -110,24 +108,29 @@ export default function Checkout() {
 
   const applyVoucher = async () => {
     const code = voucherCode.trim().toUpperCase()
-    if (!code) return
+    if (!code || checkingVoucher || submitting) return
+    setCheckingVoucher(true)
+    setVoucherMsg(null)
     try {
-      const res = await publicApi.validateVoucher({ kode: code, event_id: event.id, subtotal })
-      setVoucher(res)
+      const res = await publicApi.validateVoucher({ kode: code, event_id: event.id, items: orderItems })
+      setVoucherQuote({ ...res, cartKey })
       setVoucherMsg({ type: 'success', text: `Voucher ${res.kode} berhasil dipakai!` })
     } catch (err) {
-      setVoucher(null)
+      setVoucherQuote(null)
       setVoucherMsg({ type: 'error', text: err.message })
+    } finally {
+      setCheckingVoucher(false)
     }
   }
 
   const removeVoucher = () => {
-    setVoucher(null)
+    setVoucherQuote(null)
     setVoucherCode('')
     setVoucherMsg(null)
   }
 
   const handleCheckout = async () => {
+    if (checkingVoucher || submitting) return
     setCheckoutError(null)
     const duplicate = duplicateBuyerField(relevantFields.map(({ field, ticketId, inputKey }) => ({
       label: field.label, ticketKeys: ticketId === null ? null : [ticketId], inputKey,
@@ -168,7 +171,7 @@ export default function Checkout() {
       threads: getSocialVal('threads'),
       form_data: formData,
       voucher_code: voucher?.kode || null,
-      items: items.map((it) => ({ ticket_type_id: it.ticketId ?? it.id, jumlah: it.jumlah })),
+      items: orderItems,
     }
     try {
       setSubmitting(true)
@@ -279,12 +282,12 @@ export default function Checkout() {
                 value={voucherCode}
                 onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
                 placeholder="Masukkan kode promo"
-                disabled={!!voucher}
+                disabled={!!voucher || checkingVoucher || submitting}
               />
               {voucher ? (
                 <Button variant="secondary" onClick={removeVoucher}>Hapus</Button>
               ) : (
-                <Button variant="secondary" onClick={applyVoucher}><BadgePercent size={16} /> Pakai</Button>
+                <Button variant="secondary" onClick={applyVoucher} disabled={checkingVoucher || submitting}><BadgePercent size={16} /> {checkingVoucher ? 'Memeriksa…' : 'Pakai'}</Button>
               )}
             </div>
             {voucherMsg && (
@@ -377,7 +380,7 @@ export default function Checkout() {
               </div>
             )}
 
-            <Button className="mt-5 w-full" size="lg" onClick={handleCheckout} disabled={submitting}>
+            <Button className="mt-5 w-full" size="lg" onClick={handleCheckout} disabled={submitting || checkingVoucher}>
               <TicketIcon size={18} /> {submitting ? 'Memproses...' : 'Checkout'}
             </Button>
             <p className="mt-3 text-center text-xs text-slate-400">

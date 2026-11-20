@@ -82,8 +82,8 @@ class OrderService
             $voucher = null;
             $diskon = 0.0;
             if ($voucherCode) {
-                $voucher = $this->vouchers->resolve($voucherCode, $event, $subtotal);
-                $diskon = $this->vouchers->hitungDiskon($voucher, $subtotal);
+                $voucher = $this->vouchers->resolve($voucherCode, $event, lockForUpdate: true);
+                $diskon = $this->vouchers->discountForItems($voucher, $resolved);
             }
 
             $order = Order::create([

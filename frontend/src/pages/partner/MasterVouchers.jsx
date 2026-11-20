@@ -9,6 +9,7 @@ import { formatRupiah, formatTanggal } from '../../lib/utils'
 const EMPTY_FORM = {
   kode: '',
   event_id: '',
+  ticket_type_ids: null,
   tipe_diskon: 'nominal',
   nilai: '',
   min_pembelian: '',
@@ -30,6 +31,8 @@ export default function MasterVouchers() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+  const { data: ticketData, loading: loadingTickets, error: ticketError, reload: reloadTickets } = useApi(() => partnerApi.ticketTypes(), [])
+  const tickets = (ticketData?.data || []).filter((t) => String(t.event_id) === form.event_id)
   const [formError, setFormError] = useState('')
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -60,6 +63,8 @@ export default function MasterVouchers() {
     setForm({
       kode: v.kode,
       event_id: v.event_id ? String(v.event_id) : '',
+      ticket_type_ids: v.ticket_type_ids == null ? null :
+        (v.ticket_types ?? v.ticket_type_ids.map((id) => ({ id }))).map((ticket) => Number(ticket.id)),
       tipe_diskon: v.tipe_diskon || 'nominal',
       nilai: v.nilai ?? '',
       min_pembelian: v.min_pembelian && Number(v.min_pembelian) > 0 ? Number(v.min_pembelian) : '',
@@ -75,6 +80,7 @@ export default function MasterVouchers() {
   const handleFormChange = (key, val) => {
     setForm((prev) => ({
       ...prev,
+      ...(key === 'event_id' && prev.event_id !== val ? { ticket_type_ids: null } : {}),
       [key]: key === 'kode' ? val.toUpperCase().replace(/\s+/g, '') : val,
     }))
   }
@@ -95,12 +101,18 @@ export default function MasterVouchers() {
       return setFormError('Tanggal berakhir tidak boleh mendahului tanggal mulai.')
     }
 
+    if (form.ticket_type_ids !== null && (!form.event_id || loadingTickets || ticketError ||
+        !form.ticket_type_ids.length || form.ticket_type_ids.some((id) => !tickets.some((t) => Number(t.id) === id)))) {
+      return setFormError('Pilih minimal satu tiket yang masih tersedia di event ini.')
+    }
+
     setSaving(true)
     setFormError('')
 
     const payload = {
       kode: form.kode.trim(),
       event_id: form.event_id ? Number(form.event_id) : null,
+      ticket_type_ids: form.ticket_type_ids,
       tipe_diskon: form.tipe_diskon,
       nilai: nilaiNum,
       min_pembelian: form.min_pembelian !== '' ? Math.max(0, Number(form.min_pembelian)) : 0,
@@ -181,6 +193,9 @@ export default function MasterVouchers() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {vouchers.map((v) => {
             const event = v.event
+            const ticketNames = (v.ticket_type_ids ?? []).map((id) =>
+              (ticketData?.data || []).find((ticket) => Number(ticket.id) === Number(id))?.nama_tiket ?? 'Tiket tidak tersedia')
+            const ticketScope = v.ticket_type_ids == null ? 'Semua tiket' : ticketNames.join(', ') || 'Tidak ada tiket'
             const isUnlimited = Number(v.kuota) === 0
             const isHabis = !isUnlimited && v.terpakai >= v.kuota
             const isCopied = copiedId === v.id
@@ -211,6 +226,10 @@ export default function MasterVouchers() {
                       <span className="font-medium text-slate-700 truncate max-w-[170px]" title={event?.nama_event || 'Semua Event'}>
                         {event ? event.nama_event : 'Semua Event'}
                       </span>
+                    </div>
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="shrink-0 text-slate-400">Target Tiket:</span>
+                      <span className="break-words text-right font-medium text-slate-700">{ticketScope}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Min. Belanja:</span>
@@ -371,6 +390,40 @@ export default function MasterVouchers() {
               ))}
             </Select>
           </Field>
+
+          <Field label="Target Tiket" hint={form.event_id ? undefined : 'Pilih satu event untuk membatasi voucher ke tiket tertentu.'}>
+            <Select aria-label="Target Tiket" disabled={!form.event_id} value={form.ticket_type_ids === null ? 'all' : 'selected'}
+              onChange={(e) => handleFormChange('ticket_type_ids', e.target.value === 'all' ? null : [])}>
+              <option value="all">{form.event_id ? 'Semua tiket di event ini' : 'Semua tiket'}</option>
+              <option value="selected">Tiket tertentu</option>
+            </Select>
+          </Field>
+          {form.event_id && form.ticket_type_ids !== null && (
+            <fieldset className="space-y-2 rounded-xl border border-slate-200 px-3 pb-3">
+              <legend className="px-1 text-sm font-semibold text-slate-700">Tiket yang mendapat diskon</legend>
+              {loadingTickets ? <p role="status" className="text-xs text-slate-500">Memuat tiket…</p> : ticketError ? (
+                <button type="button" onClick={reloadTickets} className="text-sm text-brand-700 underline">Gagal memuat tiket. Coba lagi</button>
+              ) : tickets.length ? (
+                <div className="max-h-44 overflow-y-auto">
+                  {tickets.map((ticket) => {
+                    const id = Number(ticket.id)
+                    return (
+                      <label key={id} className="flex min-h-8 items-center gap-2 py-1 text-sm text-slate-700">
+                        <input type="checkbox" checked={form.ticket_type_ids.includes(id)} onChange={(e) => {
+                          const checked = e.target.checked
+                          setForm((prev) => ({ ...prev, ticket_type_ids: checked
+                            ? [...prev.ticket_type_ids, id]
+                            : prev.ticket_type_ids.filter((value) => value !== id) }))
+                        }} />
+                        <span>{ticket.nama_tiket}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              ) : <p className="text-xs text-slate-500">Belum ada jenis tiket di event ini.</p>}
+              <p className="text-xs text-slate-500">Diskon dan minimum belanja dihitung hanya dari tiket yang dicentang.</p>
+            </fieldset>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Tipe Diskon" required>

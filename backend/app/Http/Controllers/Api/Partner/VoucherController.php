@@ -6,9 +6,11 @@ use App\Enums\OrderStatus;
 use App\Models\Event;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\TicketType;
 use App\Models\Voucher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -16,12 +18,14 @@ class VoucherController extends PartnerController
 {
     public function index(Request $request)
     {
-        $vouchers = Voucher::where('organizer_id', $this->organizerId($request))
+        $organizerId = $this->organizerId($request);
+        $vouchers = Voucher::where('organizer_id', $organizerId)
             ->with('event:id,nama_event')
             ->latest()
             ->get();
 
         $this->attachPemakaian($vouchers);
+        $this->attachTicketTypes($vouchers, $organizerId);
 
         return response()->json(['data' => $vouchers]);
     }
@@ -95,21 +99,28 @@ class VoucherController extends PartnerController
         $data['kode'] = strtoupper(trim($data['kode']));
 
         $voucher = Voucher::create($data);
+        $this->attachTicketTypes(collect([$voucher]), $data['organizer_id']);
 
         return response()->json(['data' => $voucher->load('event:id,nama_event')], 201);
     }
 
     public function update(Request $request, Voucher $voucher)
     {
-        $this->authorizeVoucher($request, $voucher);
-        $data = $this->validated($request, partial: true, voucher: $voucher);
-        if (isset($data['kode'])) {
-            $data['kode'] = strtoupper(trim($data['kode']));
-        }
+        $voucher = DB::transaction(function () use ($request, $voucher) {
+            $voucher = Voucher::query()->lockForUpdate()->findOrFail($voucher->id);
+            $this->authorizeVoucher($request, $voucher);
+            $data = $this->validated($request, partial: true, voucher: $voucher);
+            if (isset($data['kode'])) {
+                $data['kode'] = strtoupper(trim($data['kode']));
+            }
 
-        $voucher->update($data);
+            $voucher->update($data);
 
-        return response()->json(['data' => $voucher->fresh()->load('event:id,nama_event')]);
+            return $voucher;
+        });
+        $this->attachTicketTypes(collect([$voucher]), $this->organizerId($request));
+
+        return response()->json(['data' => $voucher->load('event:id,nama_event')]);
     }
 
     public function destroy(Request $request, Voucher $voucher)
@@ -125,6 +136,22 @@ class VoucherController extends PartnerController
         abort_if($voucher->organizer_id !== $this->organizerId($request), 403, 'Voucher ini bukan milikmu.');
     }
 
+    private function attachTicketTypes(Collection $vouchers, int $organizerId): void
+    {
+        $ids = $vouchers->flatMap(fn (Voucher $voucher) => $voucher->ticket_type_ids ?? [])->unique()->all();
+        $tickets = $ids === [] ? collect() : TicketType::whereHas('event', fn ($query) => $query->where('organizer_id', $organizerId))
+            ->whereKey($ids)->get(['id', 'nama_tiket', 'event_id'])->keyBy('id');
+
+        foreach ($vouchers as $voucher) {
+            $targets = collect($voucher->ticket_type_ids ?? [])
+                ->map(fn ($id) => $tickets->get($id))
+                ->filter(fn ($ticket) => $ticket && (int) $ticket->event_id === (int) $voucher->event_id)
+                ->map(fn (TicketType $ticket) => $ticket->only(['id', 'nama_tiket']))
+                ->values();
+            $voucher->setAttribute('ticket_types', $targets);
+        }
+    }
+
     private function validated(Request $request, bool $partial = false, ?Voucher $voucher = null): array
     {
         $required = $partial ? 'sometimes' : 'required';
@@ -136,7 +163,9 @@ class VoucherController extends PartnerController
 
         $data = $request->validate([
             'kode' => [$required, 'string', 'max:60', $uniqueRule],
-            'event_id' => ['nullable', 'exists:events,id'],
+            'event_id' => ['nullable', 'integer', 'exists:events,id'],
+            'ticket_type_ids' => ['nullable', 'array', 'list', 'min:1'],
+            'ticket_type_ids.*' => ['required', 'integer', 'distinct'],
             'tipe_diskon' => [$required, 'in:nominal,persen'],
             'nilai' => [$required, 'numeric', 'min:0'],
             'min_pembelian' => ['nullable', 'numeric', 'min:0'],
@@ -155,6 +184,27 @@ class VoucherController extends PartnerController
         if (! empty($data['event_id'])) {
             $owned = Event::where('organizer_id', $this->organizerId($request))->whereKey($data['event_id'])->exists();
             abort_if(! $owned, 403, 'Event tidak valid untuk voucher ini.');
+        }
+
+        if (array_key_exists('ticket_type_ids', $data) || array_key_exists('event_id', $data)) {
+            $scope = $data + ($voucher?->only(['event_id', 'ticket_type_ids']) ?? []);
+            if (isset($scope['ticket_type_ids'])) {
+                if (! isset($scope['event_id'])) {
+                    throw ValidationException::withMessages(['event_id' => 'Event wajib diisi jika jenis tiket dipilih.']);
+                }
+
+                $ids = array_map('intval', $scope['ticket_type_ids']);
+                $matches = TicketType::where('event_id', $scope['event_id'])
+                    ->whereHas('event', fn ($query) => $query->where('organizer_id', $this->organizerId($request)))
+                    ->whereKey($ids)->count();
+                if ($matches !== count($ids)) {
+                    throw ValidationException::withMessages(['ticket_type_ids' => 'Jenis tiket tidak termasuk dalam event tersebut.']);
+                }
+
+                if (array_key_exists('ticket_type_ids', $data)) {
+                    $data['ticket_type_ids'] = $ids;
+                }
+            }
         }
 
         return $data;
