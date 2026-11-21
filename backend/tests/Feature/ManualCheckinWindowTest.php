@@ -132,11 +132,25 @@ class ManualCheckinWindowTest extends TestCase
             ->assertJsonPath('scan_tersedia', true)
             ->assertJsonPath('data.0.scan_tersedia', true)
             ->assertJsonPath('data.1.scan_tersedia', false);
+        $day1->update(['tanggal_mulai' => null, 'tanggal_selesai' => null]);
+        $this->putJson("{$url}/jadwal", [
+            'session_id' => $day2->id, 'ticket_type_id' => $ticket->id,
+            'checkin_mulai' => null, 'checkin_selesai' => null,
+        ])->assertOk();
+        $this->getJson($url)->assertOk()->assertJsonPath('scan_tersedia', true)
+            ->assertJsonPath('data.0.scan_tersedia', true);
         $this->postJson('/api/partner/scan', [
             'event_id' => $event->id, 'session_id' => $day1->id, 'kode_qr' => $pass->kode_qr,
         ])->assertOk()->assertJsonPath('status', 'valid');
-        $this->travelTo(Carbon::parse('2026-11-24 10:00:01', 'Asia/Jakarta'));
+
+        $ticket->sessions()->detach();
+        $day1->update(['tanggal_mulai' => '2026-11-24 08:00:00', 'tanggal_selesai' => '2026-11-24 10:00:00']);
+        $day2->update(['tanggal_mulai' => '2026-11-24 11:00:00', 'tanggal_selesai' => '2026-11-24 12:00:00']);
+        $this->travelTo(Carbon::parse('2026-11-24 11:30:00', 'Asia/Jakarta'));
         $this->getJson($url)->assertOk()->assertJsonPath('scan_tersedia', false);
+        $this->postJson('/api/partner/scan', [
+            'event_id' => $event->id, 'session_id' => $day2->id, 'kode_qr' => $pass->kode_qr,
+        ])->assertOk()->assertJsonPath('status', 'closed');
     }
 
     public function test_manual_window_requires_both_ordered_local_times_and_an_owned_pair(): void

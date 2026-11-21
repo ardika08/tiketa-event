@@ -42,17 +42,20 @@ class ScanController extends PartnerController
             ])
             ->get();
 
+        $sesiBerjalan = $sessions->first(
+            fn (EventSession $s) => JadwalMasuk::statusSesi($s->tanggal_mulai, $s->tanggal_selesai, $sekarang) === 'berjalan'
+        );
+        $sesiBawaan = $sesiBerjalan ?? $sessions->first();
+
         $jadwal = collect();
         $tersedia = [];
         $manualTerbuka = [];
         $adaJadwalManual = false;
-        $terhubung = [];
         foreach ($sessions as $session) {
             $statusSesi = JadwalMasuk::statusTanggal($session->tanggal_mulai, $session->tanggal_selesai, $sekarang);
             $tersedia[$session->id] = false;
 
             foreach ($session->ticketTypes as $ticketType) {
-                $terhubung[$ticketType->id] = true;
                 $mulai = $ticketType->pivot->checkin_mulai;
                 $selesai = $ticketType->pivot->checkin_selesai;
                 $manual = JadwalMasuk::statusCheckinManual($mulai, $selesai, $sekarang);
@@ -67,42 +70,41 @@ class ScanController extends PartnerController
                 $adaJadwalManual = $adaJadwalManual || $manual !== null;
                 if ($manual === 'dalam') {
                     $manualTerbuka[$session->id] = $tersedia[$session->id] = true;
-                } elseif ($manual === null && in_array($statusSesi, [null, 'dalam'], true)
+                } elseif ($manual === null && ($statusSesi === 'dalam' || ($statusSesi === null && $session->id === $sesiBawaan?->id))
                     && $this->jamKategoriTerbuka($ticketType, $sekarang)) {
                     $tersedia[$session->id] = true;
                 }
             }
         }
 
-        $sesiBerjalan = $sessions->first(
-            fn (EventSession $s) => JadwalMasuk::statusSesi($s->tanggal_mulai, $s->tanggal_selesai, $sekarang) === 'berjalan'
-        );
-        $sesiBawaan = $sesiBerjalan ?? $sessions->first();
-        if ($adaJadwalManual) {
-            // Changing sales assignments does not change the session encoded in issued QRs.
-            $sesiPerluCek = $sessions->filter(function (EventSession $s) use ($tersedia, $sesiBawaan, $sekarang) {
-                $status = JadwalMasuk::statusTanggal($s->tanggal_mulai, $s->tanggal_selesai, $sekarang);
+        // Sales assignment changes do not change the session encoded in an issued QR.
+        $sesiPerluCek = $sessions->filter(function (EventSession $s) use ($tersedia, $sesiBawaan, $sekarang) {
+            $status = JadwalMasuk::statusTanggal($s->tanggal_mulai, $s->tanggal_selesai, $sekarang);
 
-                return ! $tersedia[$s->id] && ($status === 'dalam' || ($status === null && $s->id === $sesiBawaan?->id));
-            })->modelKeys();
-            if ($sesiPerluCek) {
-                $terbit = DB::table('ticket_passes as pass')
-                    ->join('tickets as tiket', 'tiket.id', '=', 'pass.ticket_id')
-                    ->join('orders as pesanan', 'pesanan.id', '=', 'tiket.order_id')
-                    ->join('ticket_types as jenis', 'jenis.id', '=', 'tiket.ticket_type_id')
-                    ->leftJoin('event_session_ticket_type as pasangan', function ($join) {
-                        $join->on('pasangan.event_session_id', '=', 'pass.event_session_id')
-                            ->on('pasangan.ticket_type_id', '=', 'tiket.ticket_type_id');
-                    })
-                    ->whereNull('pasangan.id')
-                    ->whereIn('pass.event_session_id', $sesiPerluCek)
-                    ->where('pesanan.event_id', $event->id)
-                    ->where('pesanan.status', \App\Enums\OrderStatus::PAID->value)
-                    ->distinct()
-                    ->get(['pass.event_session_id', 'jenis.jam_masuk_mulai', 'jenis.jam_masuk_selesai']);
-                foreach ($terbit as $row) {
-                    $jam = JadwalMasuk::statusJam(JadwalMasuk::jamBukaEfektif($row->jam_masuk_mulai), $row->jam_masuk_selesai, $sekarang);
-                    if ($jam === null || $jam === 'dalam') {
+            return ! $tersedia[$s->id] && ($status === 'dalam' || ($status === null && $s->id === $sesiBawaan?->id));
+        })->modelKeys();
+        $tanpaSesiTerbuka = false;
+        if ($sesiPerluCek || ($sessions->isNotEmpty() && ! in_array(true, $tersedia, true))) {
+            $terbit = DB::table('ticket_passes as pass')
+                ->join('tickets as tiket', 'tiket.id', '=', 'pass.ticket_id')
+                ->join('orders as pesanan', 'pesanan.id', '=', 'tiket.order_id')
+                ->join('ticket_types as jenis', 'jenis.id', '=', 'tiket.ticket_type_id')
+                ->leftJoin('event_session_ticket_type as pasangan', function ($join) {
+                    $join->on('pasangan.event_session_id', '=', 'pass.event_session_id')
+                        ->on('pasangan.ticket_type_id', '=', 'tiket.ticket_type_id');
+                })
+                ->whereNull('pasangan.id')
+                ->where(fn ($q) => $q->whereIn('pass.event_session_id', $sesiPerluCek)->orWhereNull('pass.event_session_id'))
+                ->where('pesanan.event_id', $event->id)
+                ->where('pesanan.status', \App\Enums\OrderStatus::PAID->value)
+                ->distinct()
+                ->get(['pass.event_session_id', 'jenis.jam_masuk_mulai', 'jenis.jam_masuk_selesai']);
+            foreach ($terbit as $row) {
+                $jam = JadwalMasuk::statusJam(JadwalMasuk::jamBukaEfektif($row->jam_masuk_mulai), $row->jam_masuk_selesai, $sekarang);
+                if ($jam === null || $jam === 'dalam') {
+                    if ($row->event_session_id === null) {
+                        $tanpaSesiTerbuka = true;
+                    } else {
                         $tersedia[$row->event_session_id] = true;
                     }
                 }
@@ -142,8 +144,6 @@ class ScanController extends PartnerController
             ->orderBy('nama_tiket')
             ->get(['id', 'nama_tiket', 'jam_masuk_mulai', 'jam_masuk_selesai']);
         $adaJadwalSesi = $sessions->contains(fn (EventSession $s) => $s->tanggal_mulai !== null || $s->tanggal_selesai !== null);
-        $gerbangBawaan = ! $adaJadwalSesi || $sesiBerjalan !== null;
-        $tanpaSesiTerbuka = $gerbangBawaan && $jenisTiket->contains(fn (TicketType $t) => ! isset($terhubung[$t->id]) && $this->jamKategoriTerbuka($t, $sekarang));
         $kategori = $jenisTiket
             ->map(function (TicketType $t) use ($sekarang, $hitung, $sesiAktif, $kategoriAktif) {
                 $angka = $hitung->get($t->id);
@@ -206,9 +206,9 @@ class ScanController extends PartnerController
             ])->values(),
             'kategori' => $kategori,
             'jadwal_checkin' => $jadwal,
-            'scan_tersedia' => $adaJadwalManual ? ($tanpaSesiTerbuka || in_array(true, $tersedia, true)) : $gerbangBawaan,
+            'scan_tersedia' => $sessions->isEmpty() || $tanpaSesiTerbuka || in_array(true, $tersedia, true),
             'sesi_aktif_id' => $sesiAktif?->id,
-            'sesi_bawaan_id' => ($sesiBerjalan ?? $sessions->first())?->id,
+            'sesi_bawaan_id' => $sesiBawaan?->id,
             'ada_jadwal_sesi' => $adaJadwalSesi,
             'sekarang' => $sekarang->toIso8601String(),
             'buka_lebih_awal_menit' => JadwalMasuk::menitBukaLebihAwal(),
