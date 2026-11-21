@@ -100,6 +100,45 @@ class ManualCheckinWindowTest extends TestCase
         $scan($day2Passes[1])->assertJsonPath('status', 'valid');
     }
 
+    public function test_scanner_stays_open_for_issued_qr_after_its_ticket_type_moves_to_another_session(): void
+    {
+        Queue::fake();
+        [$user, $organizer] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+        $day1 = $event->sessions()->create([
+            'nama_session' => 'First', 'label' => 'Day 1', 'urutan' => 1,
+            'tanggal_mulai' => '2026-11-24 08:00:00', 'tanggal_selesai' => '2026-11-24 10:00:00',
+        ]);
+        $day2 = $event->sessions()->create([
+            'nama_session' => 'Second', 'label' => 'Day 2', 'urutan' => 2,
+            'tanggal_mulai' => '2026-11-25 08:00:00', 'tanggal_selesai' => '2026-11-25 10:00:00',
+        ]);
+        $ticket = $this->createTicketType($event, ['harga' => 0], [$day1->id]);
+        $code = $this->postJson('/api/orders', [
+            'event_id' => $event->id, 'nama' => 'Budi', 'email' => 'budi@mail.com', 'whatsapp' => '08123456789',
+            'items' => [['ticket_type_id' => $ticket->id, 'jumlah' => 1]],
+        ])->assertCreated()->json('data.kode_order');
+        $pass = Order::where('kode_order', $code)->firstOrFail()->tickets->first()->passes->first();
+        $ticket->sessions()->sync([$day2->id]);
+        Sanctum::actingAs($user);
+        $url = "/api/partner/scan/sessions/{$event->id}";
+        $this->putJson("{$url}/jadwal", [
+            'session_id' => $day2->id, 'ticket_type_id' => $ticket->id,
+            'checkin_mulai' => '2026-11-25T08:00', 'checkin_selesai' => '2026-11-25T10:00',
+        ])->assertOk();
+
+        $this->travelTo(Carbon::parse('2026-11-24 09:00:00', 'Asia/Jakarta'));
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('scan_tersedia', true)
+            ->assertJsonPath('data.0.scan_tersedia', true)
+            ->assertJsonPath('data.1.scan_tersedia', false);
+        $this->postJson('/api/partner/scan', [
+            'event_id' => $event->id, 'session_id' => $day1->id, 'kode_qr' => $pass->kode_qr,
+        ])->assertOk()->assertJsonPath('status', 'valid');
+        $this->travelTo(Carbon::parse('2026-11-24 10:00:01', 'Asia/Jakarta'));
+        $this->getJson($url)->assertOk()->assertJsonPath('scan_tersedia', false);
+    }
+
     public function test_manual_window_requires_both_ordered_local_times_and_an_owned_pair(): void
     {
         [$user, $organizer] = $this->createPartner();

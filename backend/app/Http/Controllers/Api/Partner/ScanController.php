@@ -77,6 +77,37 @@ class ScanController extends PartnerController
         $sesiBerjalan = $sessions->first(
             fn (EventSession $s) => JadwalMasuk::statusSesi($s->tanggal_mulai, $s->tanggal_selesai, $sekarang) === 'berjalan'
         );
+        $sesiBawaan = $sesiBerjalan ?? $sessions->first();
+        if ($adaJadwalManual) {
+            // Changing sales assignments does not change the session encoded in issued QRs.
+            $sesiPerluCek = $sessions->filter(function (EventSession $s) use ($tersedia, $sesiBawaan, $sekarang) {
+                $status = JadwalMasuk::statusTanggal($s->tanggal_mulai, $s->tanggal_selesai, $sekarang);
+
+                return ! $tersedia[$s->id] && ($status === 'dalam' || ($status === null && $s->id === $sesiBawaan?->id));
+            })->modelKeys();
+            if ($sesiPerluCek) {
+                $terbit = DB::table('ticket_passes as pass')
+                    ->join('tickets as tiket', 'tiket.id', '=', 'pass.ticket_id')
+                    ->join('orders as pesanan', 'pesanan.id', '=', 'tiket.order_id')
+                    ->join('ticket_types as jenis', 'jenis.id', '=', 'tiket.ticket_type_id')
+                    ->leftJoin('event_session_ticket_type as pasangan', function ($join) {
+                        $join->on('pasangan.event_session_id', '=', 'pass.event_session_id')
+                            ->on('pasangan.ticket_type_id', '=', 'tiket.ticket_type_id');
+                    })
+                    ->whereNull('pasangan.id')
+                    ->whereIn('pass.event_session_id', $sesiPerluCek)
+                    ->where('pesanan.event_id', $event->id)
+                    ->where('pesanan.status', \App\Enums\OrderStatus::PAID->value)
+                    ->distinct()
+                    ->get(['pass.event_session_id', 'jenis.jam_masuk_mulai', 'jenis.jam_masuk_selesai']);
+                foreach ($terbit as $row) {
+                    $jam = JadwalMasuk::statusJam(JadwalMasuk::jamBukaEfektif($row->jam_masuk_mulai), $row->jam_masuk_selesai, $sekarang);
+                    if ($jam === null || $jam === 'dalam') {
+                        $tersedia[$row->event_session_id] = true;
+                    }
+                }
+            }
+        }
         $sesiAktif = $sessions->first(fn (EventSession $s) => isset($manualTerbuka[$s->id]))
             ?? ($sesiBerjalan && $tersedia[$sesiBerjalan->id] ? $sesiBerjalan : null)
             ?? $sessions->first(fn (EventSession $s) => $tersedia[$s->id])
