@@ -303,6 +303,7 @@ export const partnerApi = {
   upload: (file, folder) => upload('/partner/uploads', file, folder ? { folder } : {}),
 
   scanSessions: (eventId) => api.get(`/partner/scan/sessions/${eventId}`),
+  updateCheckinSchedule: (eventId, payload) => api.put(`/partner/scan/sessions/${eventId}/jadwal`, payload),
   scan: (payload) => api.post('/partner/scan', payload),
   attendance: (params) => api.get(`/partner/attendance${query(params)}`),
 }

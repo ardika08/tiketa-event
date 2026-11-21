@@ -2,8 +2,9 @@
 
 namespace App\Support;
 
-use Carbon\CarbonInterface;
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 
 /**
  * Satu-satunya tempat aturan "boleh masuk sekarang atau tidak" dihitung.
@@ -27,6 +28,23 @@ use Carbon\Carbon;
  */
 class JadwalMasuk
 {
+    public const FORMAT_CHECKIN = 'Y-m-d\TH:i';
+
+    /** Jendela manual disimpan sebagai waktu lokal WIB, tanpa offset. */
+    public static function waktuCheckin(?string $nilai): ?CarbonImmutable
+    {
+        return $nilai === null ? null : CarbonImmutable::parse($nilai, 'Asia/Jakarta');
+    }
+
+    public static function statusCheckinManual(?string $mulai, ?string $selesai, CarbonInterface $sekarang): ?string
+    {
+        if ($mulai === null || $selesai === null) {
+            return null;
+        }
+
+        return self::statusTanggal(self::waktuCheckin($mulai), self::waktuCheckin($selesai), $sekarang);
+    }
+
     /**
      * Status jendela jam kategori tiket.
      *

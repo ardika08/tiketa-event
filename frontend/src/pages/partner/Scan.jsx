@@ -3,6 +3,7 @@ import { QrCode, ScanLine, CheckCircle2, XCircle, AlertTriangle, RotateCcw, Cale
 import { Button, Card, Input, PageHeader, Badge, Select } from '../../components/ui'
 import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
+import CheckinSchedule from '../../components/CheckinSchedule'
 import { formatTanggal, cn } from '../../lib/utils'
 
 // html5-qrcode (±340KB) hanya diunduh saat petugas benar-benar membuka scanner.
@@ -73,14 +74,22 @@ export default function Scan() {
     if (!eventId && events.length) setEventId(events[0].id)
   }, [events, eventId])
 
-  const { data: sessionsData, reload } = useApi(
-    () => (eventId ? partnerApi.scanSessions(eventId) : Promise.resolve({ data: [] })),
+  const { data: scanSnapshot, reload } = useApi(
+    async () => ({ eventId, response: eventId ? await partnerApi.scanSessions(eventId) : null }),
     [eventId],
   )
 
+  useEffect(() => {
+    if (!eventId) return
+    const timer = setInterval(reload, 15000)
+    return () => clearInterval(timer)
+  }, [eventId, reload])
+
+  const sessionsData = scanSnapshot?.eventId === eventId ? scanSnapshot.response : null
   const sessions = sessionsData?.data || []
   const kategori = sessionsData?.kategori || []
   const sesiAktifId = sessionsData?.sesi_aktif_id ?? null
+  const sesiBawaanId = sessionsData?.sesi_bawaan_id ?? sesiAktifId
   const adaJadwalSesi = sessionsData?.ada_jadwal_sesi ?? false
   const bukaLebihAwal = sessionsData?.buka_lebih_awal_menit ?? 0
   const sekarangIso = sessionsData?.sekarang
@@ -96,7 +105,7 @@ export default function Scan() {
 
   // Kalau tanggal sesi belum diisi (adaJadwalSesi = false), perilakunya sama
   // seperti sebelumnya: scanner selalu bisa dipakai.
-  const bolehScan = Boolean(eventId) && (!adaJadwalSesi || Boolean(sesiBerjalan))
+  const bolehScan = Boolean(eventId && sessionsData) && (sessionsData.scan_tersedia ?? (!adaJadwalSesi || Boolean(sesiBerjalan)))
 
   const hadirSesi = activeSession?.total_hadir ?? 0
   const totalSesi = activeSession?.total_pass ?? 0
@@ -154,7 +163,7 @@ export default function Scan() {
     try {
       const res = await partnerApi.scan({
         event_id: eventId,
-        ...(sesiAktifId ? { session_id: sesiAktifId } : {}),
+        ...(sesiBawaanId ? { session_id: sesiBawaanId } : {}),
         // Siapa yang menerima tiket, dan lewat gate mana. Gate ikut dari
         // penugasan petugas, bukan dipilih ulang di lapangan.
         ...(staffId ? { staff_id: Number(staffId) } : {}),
@@ -177,7 +186,7 @@ export default function Scan() {
     } finally {
       setScanning(false)
     }
-  }, [eventId, sesiAktifId, activeSession, reload, staffId, petugas])
+  }, [eventId, sesiBawaanId, activeSession, reload, staffId, petugas])
 
   const handleManualScan = () => {
     const value = code
@@ -201,6 +210,10 @@ export default function Scan() {
         title="Scan Tiket"
         description="Pindai QR tiket. Gerbang mengikuti jadwal jam masuk tiap kategori — petugas tidak perlu memilih sesi."
       />
+
+      {eventId && Array.isArray(sessionsData?.jadwal_checkin) && (
+        <CheckinSchedule key={eventId} eventId={eventId} sessions={sessions} schedules={sessionsData.jadwal_checkin} reload={reload} />
+      )}
 
       <Card className="mb-6 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -258,7 +271,10 @@ export default function Scan() {
           </div>
         )}
 
-        {!bolehScan && sesiBerikutnya && (
+        {!bolehScan && sessionsData?.scan_tersedia === false && (
+          <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Belum ada jadwal check-in yang terbuka. Scanner akan aktif saat waktu buka tiba.</p>
+        )}
+        {!bolehScan && sessionsData?.scan_tersedia == null && sesiBerikutnya && (
           <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
             <Clock size={16} className="mt-0.5 shrink-0" />
             <p>

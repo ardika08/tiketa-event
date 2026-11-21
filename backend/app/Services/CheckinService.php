@@ -31,6 +31,8 @@ class CheckinService
      *   5. GELOMBANG   — jam masuk kategori tiket sedang dibuka?
      *                                        → belum/lewat  : not_open / closed
      *   6. Belum pernah dipakai              → kalau sudah  : used
+     * Jadwal manual untuk pasangan sesi dan kategori QR menggantikan batas
+     * waktu langkah 4 dan 5, bukan pemeriksaan sesi atau tiket lainnya.
      *
      * Sesi TIDAK dipilih manual oleh petugas lagi. Sesi pencatatan diambil dari
      * QR itu sendiri ($pass->event_session_id), jadi petugas tidak mungkin salah
@@ -104,11 +106,33 @@ class CheckinService
                 $sesiCatat = $sesiPass;
             }
 
-            // ---- 4. KUNCI HARI (otomatis dari tanggal sesi) ----
+            $kategori = $pass->ticket?->ticketType;
+            $jadwal = $sesiPass && $kategori
+                ? $sesiPass->ticketTypes()->find($kategori->id)?->pivot
+                : null;
+            $mulaiManual = $jadwal?->checkin_mulai;
+            $selesaiManual = $jadwal?->checkin_selesai;
+            $manual = JadwalMasuk::statusCheckinManual($mulaiManual, $selesaiManual, $sekarang);
+
+            // ---- 4. KUNCI HARI, atau jendela check-in manual untuk QR ini ----
             if ($sesiPass) {
                 $jendelaSesi = JadwalMasuk::statusTanggal($sesiPass->tanggal_mulai, $sesiPass->tanggal_selesai, $sekarang);
 
-                if ($jendelaSesi === 'belum') {
+                if ($manual === 'belum' || $manual === 'lewat') {
+                    $belum = $manual === 'belum';
+                    $waktu = JadwalMasuk::waktuCheckin($belum ? $mulaiManual : $selesaiManual);
+                    $label = $kategori->nama_tiket.' — '.$this->labelSesi($sesiPass);
+                    $record(CheckinStatus::FAILED, 'Di luar jadwal check-in manual', $pass);
+
+                    return [
+                        'status' => $belum ? 'not_open' : 'closed',
+                        'message' => 'Check-in '.$label.($belum ? ' baru dibuka ' : ' sudah berakhir ').$this->waktu($waktu).' WIB.',
+                        'pesan_pengunjung' => 'Mohon maaf, check-in '.$label.($belum ? ' baru dibuka ' : ' telah berakhir ').$this->waktu($waktu).' WIB.',
+                        'pass' => $pass,
+                    ];
+                }
+
+                if ($manual === null && $jendelaSesi === 'belum') {
                     $record(CheckinStatus::FAILED, 'Sesi belum dibuka', $pass);
 
                     return [
@@ -119,7 +143,7 @@ class CheckinService
                     ];
                 }
 
-                if ($jendelaSesi === 'lewat') {
+                if ($manual === null && $jendelaSesi === 'lewat') {
                     $record(CheckinStatus::FAILED, 'Sesi sudah berakhir', $pass);
 
                     return [
@@ -133,7 +157,7 @@ class CheckinService
                 // Tanggal sesi belum diisi (jendelaSesi === null) → kembali ke
                 // pemeriksaan sesi manual supaya event lama tidak berubah
                 // perilakunya dan tidak ada gate yang tiba-tiba longgar.
-                if ($jendelaSesi === null && $session && $session->id !== $sesiPass->id) {
+                if ($manual === null && $jendelaSesi === null && $session && $session->id !== $sesiPass->id) {
                     $record(CheckinStatus::FAILED, 'QR bukan untuk sesi ini', $pass);
 
                     return [
@@ -147,9 +171,7 @@ class CheckinService
             // ---- 5. GELOMBANG: jam masuk kategori tiket ----
             // Kategori tanpa jam (jam_masuk_mulai & selesai kosong) tidak
             // dibatasi sama sekali — tiket lama aman.
-            $kategori = $pass->ticket?->ticketType;
-
-            if ($kategori) {
+            if ($kategori && $manual === null) {
                 // Gerbang bisa menerima lebih awal dari jam masuk resmi (config
                 // nontix.buka_lebih_awal_menit). Semua pesan memakai jam yang
                 // BENAR-BENAR ditegakkan, supaya petugas tidak menyebut 08:00

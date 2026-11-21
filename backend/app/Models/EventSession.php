@@ -41,7 +41,8 @@ class EventSession extends Model
 
     public function ticketTypes(): BelongsToMany
     {
-        return $this->belongsToMany(TicketType::class, 'event_session_ticket_type');
+        return $this->belongsToMany(TicketType::class, 'event_session_ticket_type')
+            ->withPivot('checkin_mulai', 'checkin_selesai');
     }
 
     public function ticketPasses(): HasMany

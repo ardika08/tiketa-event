@@ -10,6 +10,7 @@ use App\Models\Staff;
 use App\Models\TicketType;
 use App\Services\CheckinService;
 use App\Support\JadwalMasuk;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -24,10 +25,8 @@ class ScanController extends PartnerController
      * persis dengan yang ditampilkan ke petugas — panel jadwal dan penolakan di
      * gerbang tidak mungkin berbeda.
      *
-     * Sesi dipilih OTOMATIS: sesi yang sedang berjalan menurut jam server
-     * (status_waktu = 'berjalan'). Kalau tidak ada yang berjalan, dipakai sesi
-     * pertama supaya halaman tetap bisa dibuka. Kalau tanggal sesi belum diisi
-     * (status_waktu = 'tanpa_jadwal'), perilakunya sama seperti sebelumnya.
+     * Sesi dipilih otomatis dari jendela manual yang terbuka atau sesi yang
+     * menerima check-in bawaan. Tanggal acara tetap tidak berubah.
      */
     public function sessions(Request $request, Event $event)
     {
@@ -36,16 +35,57 @@ class ScanController extends PartnerController
         $sekarang = now();
 
         $sessions = $event->sessions()
+            ->with(['ticketTypes' => fn ($q) => $q->where('ticket_types.event_id', $event->id)->orderBy('nama_tiket')])
             ->withCount([
                 'ticketPasses as total_pass',
                 'ticketPasses as total_hadir' => fn ($q) => $q->where('status_kehadiran', 'hadir'),
             ])
             ->get();
 
+        $jadwal = collect();
+        $tersedia = [];
+        $manualTerbuka = [];
+        $adaJadwalManual = false;
+        $terhubung = [];
+        foreach ($sessions as $session) {
+            $statusSesi = JadwalMasuk::statusTanggal($session->tanggal_mulai, $session->tanggal_selesai, $sekarang);
+            $tersedia[$session->id] = false;
+
+            foreach ($session->ticketTypes as $ticketType) {
+                $terhubung[$ticketType->id] = true;
+                $mulai = $ticketType->pivot->checkin_mulai;
+                $selesai = $ticketType->pivot->checkin_selesai;
+                $manual = JadwalMasuk::statusCheckinManual($mulai, $selesai, $sekarang);
+                $jadwal->push([
+                    'session_id' => $session->id,
+                    'ticket_type_id' => $ticketType->id,
+                    'nama_tiket' => $ticketType->nama_tiket,
+                    'checkin_mulai' => JadwalMasuk::waktuCheckin($mulai)?->format(JadwalMasuk::FORMAT_CHECKIN),
+                    'checkin_selesai' => JadwalMasuk::waktuCheckin($selesai)?->format(JadwalMasuk::FORMAT_CHECKIN),
+                ]);
+
+                $adaJadwalManual = $adaJadwalManual || $manual !== null;
+                if ($manual === 'dalam') {
+                    $manualTerbuka[$session->id] = $tersedia[$session->id] = true;
+                } elseif ($manual === null && in_array($statusSesi, [null, 'dalam'], true)
+                    && $this->jamKategoriTerbuka($ticketType, $sekarang)) {
+                    $tersedia[$session->id] = true;
+                }
+            }
+        }
+
         $sesiBerjalan = $sessions->first(
             fn (EventSession $s) => JadwalMasuk::statusSesi($s->tanggal_mulai, $s->tanggal_selesai, $sekarang) === 'berjalan'
         );
-        $sesiAktif = $sesiBerjalan ?? $sessions->first();
+        $sesiAktif = $sessions->first(fn (EventSession $s) => isset($manualTerbuka[$s->id]))
+            ?? ($sesiBerjalan && $tersedia[$sesiBerjalan->id] ? $sesiBerjalan : null)
+            ?? $sessions->first(fn (EventSession $s) => $tersedia[$s->id])
+            ?? $sesiBerjalan
+            ?? $sessions->first();
+        if (! $adaJadwalManual) {
+            $sesiAktif = $sesiBerjalan ?? $sessions->first();
+        }
+        $kategoriAktif = $sesiAktif?->ticketTypes->keyBy('id') ?? collect();
 
         // Jumlah hadir per kategori dihitung untuk SESI AKTIF saja — itulah yang
         // dibutuhkan petugas di gerbang ("berapa dari tiket gelombang ini yang
@@ -65,14 +105,22 @@ class ScanController extends PartnerController
                 ->keyBy('ticket_type_id');
         }
 
-        $kategori = TicketType::query()
-            ->where('event_id', $event->id)
+        $jenisTiket = $event->ticketTypes()
             ->orderByRaw('jam_masuk_mulai is null')
             ->orderBy('jam_masuk_mulai')
             ->orderBy('nama_tiket')
-            ->get(['id', 'nama_tiket', 'jam_masuk_mulai', 'jam_masuk_selesai'])
-            ->map(function (TicketType $t) use ($sekarang, $hitung, $sesiAktif) {
+            ->get(['id', 'nama_tiket', 'jam_masuk_mulai', 'jam_masuk_selesai']);
+        $adaJadwalSesi = $sessions->contains(fn (EventSession $s) => $s->tanggal_mulai !== null || $s->tanggal_selesai !== null);
+        $gerbangBawaan = ! $adaJadwalSesi || $sesiBerjalan !== null;
+        $tanpaSesiTerbuka = $gerbangBawaan && $jenisTiket->contains(fn (TicketType $t) => ! isset($terhubung[$t->id]) && $this->jamKategoriTerbuka($t, $sekarang));
+        $kategori = $jenisTiket
+            ->map(function (TicketType $t) use ($sekarang, $hitung, $sesiAktif, $kategoriAktif) {
                 $angka = $hitung->get($t->id);
+                $pivot = $kategoriAktif->get($t->id)?->pivot;
+                $mulai = $pivot?->checkin_mulai;
+                $selesai = $pivot?->checkin_selesai;
+                $manual = JadwalMasuk::statusCheckinManual($mulai, $selesai, $sekarang);
+                $buka = JadwalMasuk::waktuCheckin($mulai);
 
                 return [
                     'id' => $t->id,
@@ -84,24 +132,29 @@ class ScanController extends PartnerController
                     // "buka lebih awal"). Dipakai layar petugas supaya badge
                     // hijau selalu cocok dengan jam yang tertulis di baris itu.
                     'label_gerbang' => JadwalMasuk::labelJam(
-                        JadwalMasuk::jamBukaEfektif($t->jam_masuk_mulai),
-                        $t->jam_masuk_selesai,
+                        $manual !== null ? $buka->format('H:i') : JadwalMasuk::jamBukaEfektif($t->jam_masuk_mulai),
+                        $manual !== null ? JadwalMasuk::waktuCheckin($selesai)->format('H:i') : $t->jam_masuk_selesai,
                     ),
                     // Konteks hari sesi dikirim ikut: di luar hari-H semua
                     // kategori harus terbaca "belum dibuka", bukan "sudah
                     // ditutup" hanya karena jamnya sudah lewat hari ini.
-                    'status' => JadwalMasuk::statusKategori(
-                        $t->jam_masuk_mulai,
-                        $t->jam_masuk_selesai,
-                        $sekarang,
-                        $sesiAktif?->tanggal_mulai,
-                        $sesiAktif?->tanggal_selesai,
-                    ),
-                    'menit_ke_buka' => JadwalMasuk::menitKeBukaKategori(
-                        $t->jam_masuk_mulai,
-                        $sekarang,
-                        $sesiAktif?->tanggal_mulai,
-                    ),
+                    'status' => match ($manual) {
+                        'belum' => 'belum_dibuka',
+                        'lewat' => 'sudah_ditutup',
+                        'dalam' => 'dibuka',
+                        default => JadwalMasuk::statusKategori(
+                            $t->jam_masuk_mulai,
+                            $t->jam_masuk_selesai,
+                            $sekarang,
+                            $sesiAktif?->tanggal_mulai,
+                            $sesiAktif?->tanggal_selesai,
+                        ),
+                    },
+                    'menit_ke_buka' => match ($manual) {
+                        'belum' => (int) ceil($sekarang->diffInSeconds($buka) / 60),
+                        null => JadwalMasuk::menitKeBukaKategori($t->jam_masuk_mulai, $sekarang, $sesiAktif?->tanggal_mulai),
+                        default => null,
+                    },
                     'total_pass' => (int) ($angka->total_pass ?? 0),
                     'total_hadir' => (int) ($angka->total_hadir ?? 0),
                 ];
@@ -118,13 +171,50 @@ class ScanController extends PartnerController
                 'total_pass' => $session->total_pass,
                 'total_hadir' => $session->total_hadir,
                 'status_waktu' => JadwalMasuk::statusSesi($session->tanggal_mulai, $session->tanggal_selesai, $sekarang),
+                'scan_tersedia' => $tersedia[$session->id],
             ])->values(),
             'kategori' => $kategori,
+            'jadwal_checkin' => $jadwal,
+            'scan_tersedia' => $adaJadwalManual ? ($tanpaSesiTerbuka || in_array(true, $tersedia, true)) : $gerbangBawaan,
             'sesi_aktif_id' => $sesiAktif?->id,
-            'ada_jadwal_sesi' => $sessions->contains(fn (EventSession $s) => $s->tanggal_mulai !== null || $s->tanggal_selesai !== null),
+            'sesi_bawaan_id' => ($sesiBerjalan ?? $sessions->first())?->id,
+            'ada_jadwal_sesi' => $adaJadwalSesi,
             'sekarang' => $sekarang->toIso8601String(),
             'buka_lebih_awal_menit' => JadwalMasuk::menitBukaLebihAwal(),
         ]);
+    }
+
+    public function updateSchedule(Request $request, Event $event)
+    {
+        $this->authorizeEvent($request, $event);
+
+        $format = JadwalMasuk::FORMAT_CHECKIN;
+        $data = $request->validate([
+            'session_id' => ['required', 'integer'],
+            'ticket_type_id' => ['required', 'integer'],
+            'checkin_mulai' => ['present', 'nullable', 'required_with:checkin_selesai', 'date_format:'.$format],
+            'checkin_selesai' => ['present', 'nullable', 'required_with:checkin_mulai', 'date_format:'.$format, 'after:checkin_mulai'],
+        ]);
+
+        $session = $event->sessions()->findOrFail($data['session_id']);
+        $ticketTypes = $session->ticketTypes();
+        $ticketTypes->where('ticket_types.event_id', $event->id)->findOrFail($data['ticket_type_id']);
+
+        $ticketTypes->updateExistingPivot($data['ticket_type_id'], [
+            'checkin_mulai' => JadwalMasuk::waktuCheckin($data['checkin_mulai'])?->toDateTimeString(),
+            'checkin_selesai' => JadwalMasuk::waktuCheckin($data['checkin_selesai'])?->toDateTimeString(),
+        ]);
+
+        return response()->json(['message' => 'Jadwal check-in tersimpan.']);
+    }
+
+    private function jamKategoriTerbuka(TicketType $ticketType, CarbonInterface $sekarang): bool
+    {
+        return in_array(JadwalMasuk::statusJam(
+            JadwalMasuk::jamBukaEfektif($ticketType->jam_masuk_mulai),
+            $ticketType->jam_masuk_selesai,
+            $sekarang,
+        ), [null, 'dalam'], true);
     }
 
     public function scan(Request $request, CheckinService $service)

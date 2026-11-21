@@ -146,6 +146,7 @@ Route::middleware(['auth:sanctum', 'sesi.idle'])->group(function () {
         Route::post('/uploads', [UploadController::class, 'store']);
 
         Route::get('/scan/sessions/{event}', [ScanController::class, 'sessions']);
+        Route::put('/scan/sessions/{event}/jadwal', [ScanController::class, 'updateSchedule']);
         Route::post('/scan', [ScanController::class, 'scan']);
         Route::get('/attendance', [ScanController::class, 'attendance']);
     });
