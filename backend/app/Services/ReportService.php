@@ -192,6 +192,8 @@ class ReportService
                 'tickets:id,order_id,kode_tiket,status_kehadiran',
                 'pembuat:id,nama',
             ])
+            ->withCount(['tickets as jumlah_tiket_dibatalkan' => fn ($tickets) => $tickets
+                ->whereHas('passes', fn ($passes) => $passes->whereNotNull('cancelled_at'))])
             ->latest('created_at')
             ->get()
             ->map(fn (Order $order) => [
@@ -210,6 +212,7 @@ class ReportService
                 'event' => $order->event?->nama_event,
                 'tiket' => $order->items->map(fn ($i) => $i->ticketType?->nama_tiket.' x'.$i->jumlah)->implode(', '),
                 'jumlah' => $order->items->sum('jumlah'),
+                'jumlah_tiket_dibatalkan' => (int) $order->jumlah_tiket_dibatalkan,
                 'total' => (float) $order->total_harga,
                 'status' => $order->status,
                 // online = lewat gateway, manual = diinput partner (OTS/tunai/transfer).

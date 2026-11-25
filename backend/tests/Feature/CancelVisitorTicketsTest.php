@@ -67,6 +67,29 @@ class CancelVisitorTicketsTest extends TestCase
             ->assertOk()->assertJsonPath('status', 'valid');
     }
 
+    public function test_buyers_report_counts_cancelled_tickets_without_changing_payment_status(): void
+    {
+        [$partner, $organizer] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+        $order = $this->issue($event, ['Workshop' => [0, 2]]);
+        Sanctum::actingAs($partner);
+
+        $report = '/api/partner/buyers';
+        $url = "/api/partner/ticket-cancellations/{$event->id}";
+        $this->getJson($report)->assertOk()->assertJsonPath('data.0.jumlah_tiket_dibatalkan', 0);
+
+        foreach ($order->tickets->values() as $index => $ticket) {
+            $payload = $this->selection($order, [$ticket->id]);
+            $payload['request_id'] .= '-'.$index;
+            $this->postJson($url, $payload)->assertOk()->assertJsonPath('results.0.status', 'cancelled');
+            $this->getJson($report)->assertOk()
+                ->assertJsonPath('data.0.kode_order', $order->kode_order)
+                ->assertJsonPath('data.0.status', 'lunas')
+                ->assertJsonPath('data.0.jumlah', 2)
+                ->assertJsonPath('data.0.jumlah_tiket_dibatalkan', $index + 1);
+        }
+    }
+
     public function test_order_scope_and_revalidation_allow_partial_batch_and_stable_replay(): void
     {
         [$partner, $organizer] = $this->createPartner();

@@ -366,7 +366,7 @@ export default function Buyers() {
         }
       />
 
-      {cancellationOpen && <BulkTicketCancellation events={events} onClose={() => setCancellationOpen(false)} />}
+      {cancellationOpen && <BulkTicketCancellation events={events} onCancelled={reload} onClose={() => setCancellationOpen(false)} />}
 
       {notif && (
         <div className={`mb-4 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${notif.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
@@ -464,8 +464,15 @@ export default function Buyers() {
                       </td>
                       <td className="px-5 py-3 font-semibold text-slate-800">{formatRupiah(b.total)}</td>
                       <td className="px-5 py-3">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <StatusBadge status={b.status} />
+                          {b.jumlah_tiket_dibatalkan > 0 && (
+                            <span className="inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">
+                              {b.jumlah_tiket_dibatalkan < b.jumlah
+                                ? `${b.jumlah_tiket_dibatalkan} dari ${b.jumlah} tiket dibatalkan`
+                                : 'Tiket dibatalkan'}
+                            </span>
+                          )}
                           {b.sumber === 'manual' && (
                             <span
                               className="ml-1 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-inset ring-slate-200"

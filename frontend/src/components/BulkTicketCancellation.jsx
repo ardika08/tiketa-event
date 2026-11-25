@@ -7,7 +7,7 @@ const emailStatus = { pending: 'Menunggu pengiriman', queued: 'Menunggu pengirim
 const ticketStatus = { cancelled: 'Dibatalkan', checked_in: 'Sudah check-in', ineligible: 'Tidak memenuhi syarat pembatalan' }
 const sessionText = (value) => Array.isArray(value) ? value.join(', ') : value
 
-export default function BulkTicketCancellation({ events, onClose }) {
+export default function BulkTicketCancellation({ events, onCancelled, onClose }) {
   const [eventId, setEventId] = useState('')
   const [query, setQuery] = useState('')
   const [data, setData] = useState(null)
@@ -69,6 +69,7 @@ export default function BulkTicketCancellation({ events, onClose }) {
         reason, internal_note: internal.trim() || null, request_id: requestId.current,
       })
       setResults(res.results ?? [])
+      if (res.results?.some((result) => result.status === 'cancelled')) void onCancelled?.()
       if (res.results?.some((result) => result.status === 'failed')) {
         setError('Sebagian hasil belum bisa dipastikan. Ulangi konfirmasi untuk memeriksa pesanan yang sama tanpa membatalkan tiket dua kali.')
       } else { setStep('result'); setSelected({}) }
