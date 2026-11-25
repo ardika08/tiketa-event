@@ -20,6 +20,8 @@
 
 <h3 style="margin:24px 0 8px;font-size:15px;">E-Ticket (QR per Hari)</h3>
 @foreach ($order->tickets as $ticket)
+    @php $activePasses = $ticket->passes->whereNull('cancelled_at'); @endphp
+    @continue($ticket->passes->isNotEmpty() && $activePasses->isEmpty())
     <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px;">
         <p style="margin:0;font-size:13px;font-weight:bold;">{{ $ticket->ticketType->nama_tiket }}</p>
         @if ($ticket->ticketType?->jam_masuk_mulai)
@@ -30,7 +32,7 @@
         @endif
         <p style="margin:2px 0 8px;font-size:12px;color:#64748b;">Pemegang: {{ $ticket->nama_pemegang }} · Kode: {{ $ticket->kode_tiket }}</p>
         <table style="width:100%;font-size:12px;border-collapse:collapse;">
-            @foreach ($ticket->passes as $pass)
+            @foreach ($activePasses as $pass)
                 <tr>
                     <td style="padding:4px 0;color:#64748b;">
                         {{ $pass->session?->label ?? 'Tiket Masuk' }}

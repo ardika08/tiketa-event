@@ -77,6 +77,7 @@ const FLASH_STYLE = {
   closed: { wrap: 'bg-amber-500/95', icon: AlertTriangle, title: 'SUDAH DITUTUP' },
   unpaid: { wrap: 'bg-amber-500/95', icon: AlertTriangle, title: 'BELUM LUNAS' },
   invalid: { wrap: 'bg-rose-500/95', icon: XCircle, title: 'GAGAL' },
+  cancelled: { wrap: 'bg-rose-500/95', icon: XCircle, title: 'TIKET DIBATALKAN' },
   pending: { wrap: 'bg-slate-800/90', icon: Loader2, title: 'MEMERIKSA…' },
 }
 

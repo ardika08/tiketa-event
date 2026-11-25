@@ -56,7 +56,9 @@ class OrderResource extends JsonResource
             'payment_url' => $paymentUrl,
             'event' => new EventResource($this->whenLoaded('event')),
             'items' => OrderItemResource::collection($this->whenLoaded('items')),
-            'tickets' => TicketResource::collection($this->whenLoaded('tickets')),
+            'tickets' => TicketResource::collection($this->whenLoaded('tickets', fn () => $this->tickets
+                ->reject(fn ($ticket) => $ticket->relationLoaded('passes') && $ticket->passes->isNotEmpty() && $ticket->passes->whereNull('cancelled_at')->isEmpty())
+                ->values())),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }

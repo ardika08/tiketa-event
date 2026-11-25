@@ -9,9 +9,9 @@ class TicketResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $passes = $this->whenLoaded('passes');
-        $sessionIds = $this->whenLoaded('passes', fn () => $this->passes->pluck('event_session_id')->filter()->values());
-        $labels = $this->whenLoaded('passes', fn () => $this->passes
+        $passes = $this->whenLoaded('passes', fn () => $this->passes->whereNull('cancelled_at')->values());
+        $sessionIds = $this->whenLoaded('passes', fn () => $passes->pluck('event_session_id')->filter()->values());
+        $labels = $this->whenLoaded('passes', fn () => $passes
             ->map(fn ($pass) => $pass->session?->label)
             ->filter()
             ->values());
@@ -27,7 +27,7 @@ class TicketResource extends JsonResource
             'gambar_url' => $this->whenLoaded('ticketType', fn () => $this->ticketType?->gambar_url),
             'status_kehadiran' => $this->status_kehadiran?->value,
             'checkin_at' => $this->checkin_at?->toIso8601String(),
-            'is_bundle' => $this->whenLoaded('passes', fn () => $this->passes->whereNotNull('event_session_id')->count() > 1),
+            'is_bundle' => $this->whenLoaded('passes', fn () => $passes->whereNotNull('event_session_id')->count() > 1),
             'session_ids' => $sessionIds,
             'session_labels' => $labels,
             'passes' => TicketPassResource::collection($passes),

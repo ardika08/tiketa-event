@@ -24,6 +24,7 @@ class TicketPass extends Model
         return [
             'status_kehadiran' => TicketStatus::class,
             'checkin_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 

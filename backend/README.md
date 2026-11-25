@@ -379,6 +379,8 @@ Shared hosting tidak punya daemon `queue:work`. Tambahkan 2 cron job di cPanel (
 * * * * * /opt/cpanel/ea-php82/root/usr/bin/php /home/USER/nontix-backend/artisan queue:work --stop-when-empty --max-time=55 >> /dev/null 2>&1
 ```
 
+Email pembatalan tiket diproses oleh scheduler (`nontix:send-ticket-cancellation-notifications`, setiap menit), bukan worker `queue:work`. Periksa `php artisan schedule:list` dan pastikan cron `schedule:run` menunjuk ke backend produksi. Email memerlukan Mailketing mode live dan pengirim terverifikasi. Status **Perlu cek di Mailketing** berarti hasil pengiriman tidak pasti; periksa riwayat penyedia sebelum melakukan pengiriman manual agar email tidak ganda.
+
 ### 6. Webhook Mayar
 Setelah domain aktif, daftarkan webhook:
 ```bash

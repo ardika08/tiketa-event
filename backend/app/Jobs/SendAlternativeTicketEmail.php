@@ -35,7 +35,7 @@ class SendAlternativeTicketEmail implements ShouldQueue
     {
         $order = Order::with($orders->relations())->find($this->orderId);
 
-        if (! $order || ! $order->isPaid()) {
+        if (! $order || ! $order->isPaid() || $order->hasOnlyCancelledPasses()) {
             return;
         }
 

@@ -93,6 +93,12 @@ class Order extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function hasOnlyCancelledPasses(): bool
+    {
+        return $this->tickets()->whereHas('passes', fn ($passes) => $passes->whereNotNull('cancelled_at'))->exists()
+            && ! $this->tickets()->whereHas('passes', fn ($passes) => $passes->whereNull('cancelled_at'))->exists();
+    }
+
     public function isPending(): bool
     {
         return $this->status === OrderStatus::PENDING;

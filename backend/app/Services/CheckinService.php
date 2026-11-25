@@ -106,6 +106,12 @@ class CheckinService
                 $sesiCatat = $sesiPass;
             }
 
+            if ($pass->cancelled_at !== null) {
+                $record(CheckinStatus::FAILED, 'QR telah dibatalkan', $pass);
+
+                return ['status' => 'cancelled', 'message' => 'Tiket ini telah dibatalkan.', 'pass' => $pass];
+            }
+
             $kategori = $pass->ticket?->ticketType;
             $jadwal = $sesiPass && $kategori
                 ? $sesiPass->ticketTypes()->find($kategori->id)?->pivot

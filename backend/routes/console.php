@@ -28,6 +28,11 @@ Schedule::command('nontix:sync-payments')
     ->withoutOverlapping()
     ->name('nontix-sync-payments');
 
+Schedule::command('nontix:send-ticket-cancellation-notifications')
+    ->everyMinute()
+    ->withoutOverlapping(5)
+    ->runInBackground();
+
 /*
 || Jaring pengaman kuota: hitung ulang sisa_kuota dari data order sekali sehari.
 || Idempoten — angkanya selalu diturunkan dari sumber kebenaran (order), jadi

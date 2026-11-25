@@ -22,6 +22,7 @@ const RESULT_STYLE = {
   closed: { bg: 'from-amber-500 to-orange-600', icon: CalendarX, label: 'Sudah Ditutup' },
   unpaid: { bg: 'from-amber-500 to-orange-600', icon: AlertTriangle, label: 'Belum Lunas' },
   invalid: { bg: 'from-rose-500 to-red-600', icon: XCircle, label: 'Gagal' },
+  cancelled: { bg: 'from-rose-500 to-red-600', icon: XCircle, label: 'Tiket Dibatalkan' },
 }
 
 // Status gelombang tiap kategori tiket di panel jadwal.

@@ -122,6 +122,11 @@ Route::middleware(['auth:sanctum', 'sesi.idle'])->group(function () {
         Route::get('/buyers', [PartnerReportController::class, 'buyers']);
         // Berkas biner, bukan JSON — endpoint terpisah agar kontraknya jelas.
         Route::get('/buyers/pdf', [PartnerReportController::class, 'buyersPdf']);
+        Route::prefix('/ticket-cancellations/{event}')->controller(\App\Http\Controllers\Api\Partner\TicketCancellationController::class)->group(function () {
+            Route::get('/', 'index')->middleware('throttle:60,1');
+            Route::post('/', 'store')->middleware('throttle:15,1');
+            Route::post('/retry/{notification}', 'retry')->whereNumber('notification')->middleware('throttle:15,1');
+        });
         // Kirim ulang e-ticket oleh partner (tombol di /partner/pembeli).
         // Dibatasi 20x / 10 menit: cukup untuk membantu beberapa pembeli
         // sekaligus, tetapi mencegah klik berulang yang tak sengaja.

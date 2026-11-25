@@ -44,6 +44,7 @@ class OrderController extends PartnerController
             ]);
         }
 
+        $this->pastikanTiketMasihBerlaku($order);
         SendResendTicketEmail::dispatch($order->id);
 
         return response()->json([
@@ -142,6 +143,7 @@ class OrderController extends PartnerController
             ]);
         }
 
+        $this->pastikanTiketMasihBerlaku($order);
         SendAlternativeTicketEmail::dispatch($order->id, $tujuan, $request->user()->id);
 
         return response()->json([
@@ -149,6 +151,13 @@ class OrderController extends PartnerController
             'tujuan' => $tujuan,
             'email_pesanan' => $order->email,
         ]);
+    }
+
+    private function pastikanTiketMasihBerlaku(Order $order): void
+    {
+        if ($order->hasOnlyCancelledPasses()) {
+            throw ValidationException::withMessages(['order' => 'Semua tiket dalam pesanan ini telah dibatalkan.']);
+        }
     }
 
     /** 404 (bukan 403) supaya keberadaan pesanan partner lain tidak bocor. */

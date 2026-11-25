@@ -30,6 +30,7 @@ class TicketController extends Controller
             ->where('status', 'lunas')
             ->when($data['kode_order'] ?? null, fn ($q, $v) => $q->where('kode_order', $v))
             ->when($data['email'] ?? null, fn ($q, $v) => $q->where('email', $v))
+            ->when(empty($data['kode_order']), fn ($q) => $q->whereHas('tickets.passes', fn ($passes) => $passes->whereNull('cancelled_at')))
             ->with($orders->relations())
             ->latest('paid_at')
             ->first();
@@ -59,11 +60,16 @@ class TicketController extends Controller
             ->where('status', 'lunas')
             ->when($data['kode_order'] ?? null, fn ($q, $v) => $q->where('kode_order', $v))
             ->when($data['email'] ?? null, fn ($q, $v) => $q->where('email', $v))
+            ->when(empty($data['kode_order']), fn ($q) => $q->whereHas('tickets.passes', fn ($passes) => $passes->whereNull('cancelled_at')))
             ->latest('paid_at')
             ->first();
 
         if (! $order) {
             throw ValidationException::withMessages(['kode_order' => 'Pesanan tidak ditemukan.']);
+        }
+
+        if ($order->hasOnlyCancelledPasses()) {
+            throw ValidationException::withMessages(['kode_order' => 'Semua tiket dalam pesanan ini telah dibatalkan.']);
         }
 
         SendResendTicketEmail::dispatch($order->id);

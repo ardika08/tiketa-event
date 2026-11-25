@@ -283,6 +283,9 @@ export const partnerApi = {
 
   analytics: (params) => api.get(`/partner/analytics${query(params)}`),
   buyers: () => api.get('/partner/buyers'),
+  ticketCancellationList: (eventId, query) => api.get(`/partner/ticket-cancellations/${eventId}?query=${encodeURIComponent(query)}`),
+  cancelVisitorTickets: (eventId, payload) => api.post(`/partner/ticket-cancellations/${eventId}`, payload),
+  retryCancellationEmail: (eventId, id) => api.post(`/partner/ticket-cancellations/${eventId}/retry/${id}`),
   resendTicket: (orderId) => api.post(`/partner/orders/${orderId}/resend`),
   // Riwayat pengiriman email pesanan + jalur darurat kirim ke alamat lain.
   riwayatEmail: (orderId) => api.get(`/partner/orders/${orderId}/emails`),

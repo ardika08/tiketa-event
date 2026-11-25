@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\MailketingRejected;
 use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -49,22 +50,37 @@ class MailketingService
         }
     }
 
-    private function sendViaApi(Mailable $mailable, string $to, ?string $messageId): void
+    /** Require a provider acknowledgment; no simulated send or SMTP fallback. */
+    public function sendConfirmed(Mailable $mailable, string $to, string $messageId): void
+    {
+        if (! $this->isLive()) {
+            throw new MailketingRejected('Mailketing live mode is disabled.');
+        }
+
+        $this->sendViaApi($mailable, $to, $messageId, true);
+    }
+
+    private function sendViaApi(Mailable $mailable, string $to, ?string $messageId, bool $confirmedOnly = false): void
     {
         $baseUrl = rtrim((string) config('nontix.mailketing.base_url'), '/');
         $token = (string) config('nontix.mailketing.api_token');
 
         if ($token === '') {
-            throw new \RuntimeException('MAILKETING_API_TOKEN belum diisi.');
+            throw new MailketingRejected('MAILKETING_API_TOKEN belum diisi.');
         }
 
-        $content = $mailable->render();
+        try {
+            $content = $mailable->render();
+        } catch (\Throwable $error) {
+            throw new MailketingRejected('Template email gagal dirender.', previous: $error);
+        }
         $subject = $mailable->subject ?: '(Tanpa Subjek)';
         $sentMessageId = $messageId ?? 'nontix-'.Str::random(12);
 
         $response = Http::timeout(20)
             ->withHeaders(['X-Api-Token' => $token])
             ->acceptJson()
+            ->withoutRedirecting()
             ->post($baseUrl.'/api/v2/send', [
                 'from_name' => (string) config('mail.from.name'),
                 'from_email' => (string) config('mail.from.address'),
@@ -75,12 +91,23 @@ class MailketingService
             ]);
 
         if (! $response->successful()) {
+            if ($confirmedOnly && in_array($response->status(), [400, 401, 402, 403, 404, 405, 413, 422, 429], true)) {
+                throw new MailketingRejected('Mailketing rejected the message.');
+            }
+
             throw new \RuntimeException('HTTP '.$response->status().': '.Str::limit($response->body(), 300));
         }
 
         $body = $response->json();
+        if ($confirmedOnly && ($body['success'] ?? null) === false) {
+            throw new MailketingRejected('Mailketing rejected the message.');
+        }
         if (($body['success'] ?? false) !== true) {
             throw new \RuntimeException('API gagal: '.($body['message'] ?? 'respons tidak dikenal'));
+        }
+
+        if ($confirmedOnly) {
+            return;
         }
 
         Log::info('[Mailketing:api] Email terkirim.', [

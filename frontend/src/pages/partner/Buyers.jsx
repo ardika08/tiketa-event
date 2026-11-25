@@ -5,6 +5,7 @@ import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
 import { downloadXlsx, namaFileXlsx } from '../../lib/csv'
+import BulkTicketCancellation from '../../components/BulkTicketCancellation'
 
 const PER_PAGE = 6
 
@@ -102,6 +103,7 @@ export default function Buyers() {
 
   // Kirim manual ke alamat lain (kasus email pembeli tidak sampai).
   const [emailModal, setEmailModal] = useState(null)
+  const [cancellationOpen, setCancellationOpen] = useState(false)
   const [emailTujuan, setEmailTujuan] = useState('')
   const [emailKonfirmasi, setEmailKonfirmasi] = useState(false)
   const [emailError, setEmailError] = useState('')
@@ -351,6 +353,7 @@ export default function Buyers() {
             <Button onClick={bukaManual}>
               <Plus size={16} /> Jual Tiket Manual
             </Button>
+            <Button variant="secondary" onClick={() => setCancellationOpen(true)}>Batalkan Tiket Visitor</Button>
             <Button variant="secondary" onClick={ekspor} disabled={eksporLoading || filtered.length === 0}>
               {eksporLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
               {eksporLoading ? 'Menyiapkan…' : 'Ekspor Excel'}
@@ -362,6 +365,8 @@ export default function Buyers() {
           </>
         }
       />
+
+      {cancellationOpen && <BulkTicketCancellation events={events} onClose={() => setCancellationOpen(false)} />}
 
       {notif && (
         <div className={`mb-4 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${notif.ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
