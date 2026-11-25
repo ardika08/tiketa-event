@@ -42,7 +42,7 @@ class CancelVisitorTicketsTest extends TestCase
         $preview = $this->getJson($url.'?query='.$order->kode_order)->assertOk()
             ->assertJsonPath('orders.0.tickets.0.eligible', true)
             ->assertJsonPath('orders.0.tickets.0.sesi', ['Day A', 'Day B'])
-            ->assertJsonPath('orders.0.tickets.2.eligible', false);
+            ->assertJsonPath('orders.0.tickets.2.eligible', true);
         $this->assertStringNotContainsString($selected->passes[0]->kode_qr, $preview->getContent());
         $this->assertNull($selected->passes[0]->fresh()->cancelled_at);
 
@@ -213,23 +213,26 @@ class CancelVisitorTicketsTest extends TestCase
         Http::assertSentCount(1);
     }
 
-    public function test_eligibility_uses_price_at_purchase_and_requires_visitor_token(): void
+    public function test_active_tickets_are_cancellable_regardless_of_name_or_price(): void
     {
         [$partner, $organizer] = $this->createPartner();
         $event = $this->createEvent($organizer);
-        $order = $this->issue($event, ['Visitor' => [1000, 1], 'VisitorPlus' => [0, 1], 'Free Visitor' => [0, 1]]);
-        [$paid, $other, $visitor] = $order->tickets->values();
-        $paid->ticketType()->update(['harga' => 0]);
-        $visitor->ticketType()->update(['harga' => 1000]);
+        $order = $this->issue($event, ['Workshop VIP' => [1000, 1], 'DIY with Healthyway Kids' => [0, 1], 'Free Visitor' => [0, 1]]);
+        [$paid, $diy, $visitor] = $order->tickets->values();
+        $payments = $order->payments()->get()->toArray();
         $url = "/api/partner/ticket-cancellations/{$event->id}";
         Sanctum::actingAs($partner);
         $this->getJson($url.'?query='.$order->email)->assertOk()
-            ->assertJsonPath('orders.0.tickets.0.eligible', false)
-            ->assertJsonPath('orders.0.tickets.1.eligible', false)
+            ->assertJsonPath('orders.0.tickets.0.eligible', true)
+            ->assertJsonPath('orders.0.tickets.1.eligible', true)
             ->assertJsonPath('orders.0.tickets.2.eligible', true);
-        $this->postJson($url, $this->selection($order, [$paid->id, $other->id, $visitor->id]))
-            ->assertJsonPath('results.0.status', 'skipped');
+        $this->postJson($url, $this->selection($order, [$paid->id, $diy->id]))
+            ->assertJsonPath('results.0.status', 'cancelled');
+        $this->assertSame(2, $paid->passes()->whereNotNull('cancelled_at')->count());
+        $this->assertSame(2, $diy->passes()->whereNotNull('cancelled_at')->count());
         $this->assertNull($visitor->passes[0]->fresh()->cancelled_at);
+        $this->assertTrue($order->fresh()->isPaid());
+        $this->assertSame($payments, $order->payments()->get()->toArray());
     }
 
     private function issue(Event $event, array $types): Order

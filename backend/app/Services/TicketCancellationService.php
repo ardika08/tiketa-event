@@ -91,7 +91,7 @@ class TicketCancellationService
                 $message ??= match ($this->status($order, $ticket, $passes->get($ticket->id, collect()))) {
                     'cancelled' => 'Setidaknya satu tiket sudah dibatalkan.',
                     'checked_in' => 'Setidaknya satu tiket sudah dipakai untuk check-in.',
-                    'ineligible' => 'Setidaknya satu tiket bukan tiket Visitor gratis yang dapat dibatalkan.',
+                    'ineligible' => 'Setidaknya satu tiket tidak aktif atau tidak dapat dibatalkan.',
                     default => null,
                 };
             }
@@ -153,15 +153,11 @@ class TicketCancellationService
             return 'checked_in';
         }
 
-        // No category field on ticket_types: match a complete Visitor token,
-        // then require the immutable order-line price, not today's list price,
-        // the mixed order total, or an order-level voucher with no allocation.
+        // Eligibility depends on issuance and ownership, not name or price.
         $item = $ticket->orderItem;
         if (! $order->isPaid() || $passes->isEmpty() || ! $item
             || $item->order_id !== $order->id || $item->ticket_type_id !== $ticket->ticket_type_id
-            || $item->harga_satuan === null || (float) $item->harga_satuan !== 0.0
-            || $ticket->ticketType?->event_id !== $order->event_id
-            || ! preg_match('/(?<![\pL\pN])Visitor(?![\pL\pN])/iu', $ticket->ticketType->nama_tiket)) {
+            || $ticket->ticketType?->event_id !== $order->event_id) {
             return 'ineligible';
         }
 

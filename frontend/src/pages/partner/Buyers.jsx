@@ -353,7 +353,7 @@ export default function Buyers() {
             <Button onClick={bukaManual}>
               <Plus size={16} /> Jual Tiket Manual
             </Button>
-            <Button variant="secondary" onClick={() => setCancellationOpen(true)}>Batalkan Tiket Visitor</Button>
+            <Button variant="secondary" onClick={() => setCancellationOpen(true)}>Batalkan Tiket</Button>
             <Button variant="secondary" onClick={ekspor} disabled={eksporLoading || filtered.length === 0}>
               {eksporLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
               {eksporLoading ? 'Menyiapkan…' : 'Ekspor Excel'}

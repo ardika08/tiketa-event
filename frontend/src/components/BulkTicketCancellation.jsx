@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Input, Modal, Select } from './ui'
 import { partnerApi } from '../lib/api'
 
-const DEFAULT_REASON = 'Pendaftaran belum memenuhi ketentuan untuk mendapatkan tiket Visitor gratis.'
+const DEFAULT_REASON = 'Tiket dibatalkan oleh penyelenggara.'
 const emailStatus = { pending: 'Menunggu pengiriman', queued: 'Menunggu pengiriman', sending: 'Sedang dikirim', sent: 'Diterima penyedia email', failed: 'Gagal dikirim', uncertain: 'Perlu cek di Mailketing' }
 const ticketStatus = { cancelled: 'Dibatalkan', checked_in: 'Sudah check-in', ineligible: 'Tidak memenuhi syarat pembatalan' }
 const sessionText = (value) => Array.isArray(value) ? value.join(', ') : value
@@ -64,7 +64,7 @@ export default function BulkTicketCancellation({ events, onClose }) {
     if (active.current || !picks.length || !reason || !requestId.current || tooMany) return
     active.current = true; setBusy(true); setError('')
     try {
-      const res = await partnerApi.cancelVisitorTickets(eventId, {
+      const res = await partnerApi.cancelTickets(eventId, {
         orders: orders.map(({ order, tickets }) => ({ order_id: order.id, ticket_ids: tickets.map(({ id }) => id) })),
         reason, internal_note: internal.trim() || null, request_id: requestId.current,
       })
@@ -89,7 +89,7 @@ export default function BulkTicketCancellation({ events, onClose }) {
   }
 
   const notifications = data?.notifications ?? []
-  return <Modal open onClose={() => { if (!active.current) onClose() }} title="Batalkan tiket Visitor" size="xl" footer={<>
+  return <Modal open onClose={() => { if (!active.current) onClose() }} title="Batalkan tiket" size="xl" footer={<>
     <Button variant="secondary" disabled={busy} onClick={() => {
       if (step !== 'select') { setStep('select'); setError('') }
       else onClose()
@@ -118,14 +118,14 @@ export default function BulkTicketCancellation({ events, onClose }) {
               </label>)}
             </fieldset>)}
           </div>
-          <label className="grid gap-1 text-sm font-semibold">Alasan untuk pembeli<Select value={mode} onChange={(e) => setMode(e.target.value)}><option value="default">Belum memenuhi ketentuan Visitor gratis</option><option value="custom">Tulis alasan sendiri</option></Select></label>
+          <label className="grid gap-1 text-sm font-semibold">Alasan untuk pembeli<Select value={mode} onChange={(e) => setMode(e.target.value)}><option value="default">Pembatalan oleh penyelenggara</option><option value="custom">Tulis alasan sendiri</option></Select></label>
           {mode === 'custom' ? <label className="grid gap-1 text-sm font-semibold">Alasan yang dikirim<textarea className="input min-h-20" value={custom} maxLength={500} onChange={(e) => setCustom(e.target.value)} /></label> : <p className="text-sm text-slate-600">{DEFAULT_REASON}</p>}
           <label className="grid gap-1 text-sm font-semibold">Catatan internal (opsional)<textarea className="input min-h-16" value={internal} maxLength={1000} onChange={(e) => setInternal(e.target.value)} /></label>
           <p className="text-xs text-slate-600">Catatan internal tidak dikirim ke pembeli.</p>
         </>}
       </>}
       {step === 'preview' && <>
-        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><strong>{picks.length} tiket dari {orders.length} pesanan</strong> akan dibatalkan. QR tiket yang dipilih tidak dapat digunakan. Tiket lain tetap berlaku.</p>
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><strong>{picks.length} tiket dari {orders.length} pesanan</strong> akan dibatalkan. QR tiket yang dipilih tidak dapat digunakan. Tiket lain tetap berlaku. Pembatalan ini tidak mengembalikan dana secara otomatis.</p>
         <div className="max-h-80 space-y-2 overflow-y-auto" aria-label="Rincian pembatalan dan email">
           {orders.map(({ order, tickets }) => <details key={order.id} className="rounded-lg border border-slate-200 p-3 text-sm" open>
             <summary className="cursor-pointer font-semibold">{order.kode_order} · {tickets.length} tiket · Preview email</summary>
