@@ -5,6 +5,7 @@ import { partnerApi } from '../../lib/api'
 import { useApi } from '../../lib/useApi'
 import { formatRupiah, formatTanggal } from '../../lib/utils'
 import { downloadXlsx, namaFileXlsx } from '../../lib/csv'
+import { appendBuyerFormColumns } from '../../lib/buyerExport'
 import BulkTicketCancellation from '../../components/BulkTicketCancellation'
 
 const PER_PAGE = 6
@@ -312,7 +313,7 @@ export default function Buyers() {
         LABEL_METODE[b.metode_bayar] || '', b.dibuat_oleh || '',
         formatTanggal(b.tanggal, { withTime: true }),
       ])
-      await downloadXlsx(namaFileXlsx('data-pembeli'), [header, ...body])
+      await downloadXlsx(namaFileXlsx('data-pembeli'), appendBuyerFormColumns([header, ...body], filtered))
       setNotif({ ok: true, text: 'File Excel berhasil diunduh.' })
     } catch (err) {
       setNotif({ ok: false, text: err?.message || 'Gagal menyiapkan file Excel.' })

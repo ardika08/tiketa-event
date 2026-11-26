@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\OrderStatus;
 use App\Enums\PayoutStatus;
 use App\Models\Event;
+use App\Models\FormField;
 use App\Models\Order;
 use App\Models\Organizer;
 use App\Models\Payout;
@@ -192,6 +193,11 @@ class ReportService
                 'tickets:id,order_id,kode_tiket,status_kehadiran',
                 'pembuat:id,nama',
             ])
+            // Hanya field formulir milik event tersebut; jawaban mentah di
+            // form_data tidak ikut diekspor mentah-mentah.
+            ->with(['event.formFields' => fn ($fields) => $fields
+                ->where('status', 'aktif')
+                ->where(fn ($scoped) => $scoped->whereNull('ticket_type_ids')->orWhereJsonLength('ticket_type_ids', '>', 0))])
             ->withCount(['tickets as jumlah_tiket_dibatalkan' => fn ($tickets) => $tickets
                 ->whereHas('passes', fn ($passes) => $passes->whereNotNull('cancelled_at'))])
             ->latest('created_at')
@@ -206,6 +212,7 @@ class ReportService
                 'tiktok' => $order->tiktok,
                 'threads' => $order->threads,
                 'form_data' => $order->form_data,
+                'form_export' => $this->formExport($order),
                 'ticket_names' => $order->items->mapWithKeys(
                     fn ($i) => [(string) $i->ticket_type_id => $i->ticketType?->nama_tiket]
                 )->all(),
@@ -224,6 +231,78 @@ class ReportService
                 'tanggal' => ($order->paid_at ?? $order->created_at)?->toIso8601String(),
             ])
             ->all();
+    }
+
+    /**
+     * Jawaban formulir yang aman diekspor: hanya label field yang terdaftar
+     * untuk event ini dan jenis tiket yang benar-benar dibeli. Bentuknya daftar
+     * {label, ticket_id, value} supaya jenis tiket menjadi identitas kolom,
+     * bukan urutan kemunculan di form_data.
+     *
+     * @return list<array{label: string, ticket_id: int|null, value: string}>
+     */
+    private function formExport(Order $order): array
+    {
+        $raw = is_array($order->form_data) ? $order->form_data : [];
+        $purchased = $order->items->pluck('ticket_type_id')->map(fn ($id) => (int) $id)->unique()->all();
+        $fields = FormField::query()
+            ->where('event_id', $order->event_id)
+            ->where('status', 'aktif')
+            ->where(fn ($scoped) => $scoped->whereNull('ticket_type_ids')->orWhereJsonLength('ticket_type_ids', '>', 0))
+            ->orderBy('urutan')->orderBy('id')
+            ->get();
+
+        $answers = [];
+        foreach ($fields as $field) {
+            $appliesToAll = $field->ticket_type_ids === null && $field->ticket_type_id === null;
+            $targets = $field->targetTicketIds();
+            if (! $appliesToAll && $targets === []) {
+                continue;
+            }
+
+            if ($appliesToAll) {
+                $value = $this->scalarAnswer($this->formAnswer($field, $raw['order'] ?? []));
+                if ($value !== null) {
+                    $answers[] = ['label' => $field->label, 'ticket_id' => null, 'value' => $value];
+                }
+
+                continue;
+            }
+
+            foreach (array_values(array_intersect($purchased, $targets)) as $ticketId) {
+                $value = $this->scalarAnswer($this->formAnswer($field, $raw['tickets'][$ticketId] ?? []));
+                if ($value !== null) {
+                    $answers[] = ['label' => $field->label, 'ticket_id' => $ticketId, 'value' => $value];
+                }
+            }
+        }
+
+        return $answers;
+    }
+
+    /** Samakan cara membaca jawaban dengan validasi checkout. */
+    private function formAnswer(FormField $field, mixed $answers): mixed
+    {
+        if (! is_array($answers)) {
+            return null;
+        }
+
+        return $answers[$field->label]
+            ?? $answers[$field->key ?? '']
+            ?? $answers[strtolower($field->key ?: $field->label)]
+            ?? $answers[strtolower($field->label)]
+            ?? null;
+    }
+
+    private function scalarAnswer(mixed $value): ?string
+    {
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $text = trim((string) $value);
+
+        return $text === '' ? null : $text;
     }
 
     public function partnerFinance(int $organizerId): array

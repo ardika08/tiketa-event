@@ -190,7 +190,7 @@ class MultiTicketFormFieldTest extends TestCase
     public function test_checkout_requires_an_answer_for_each_matching_ticket_type_in_a_mixed_cart(): void
     {
         Queue::fake();
-        [, $organizer] = $this->createPartner();
+        [$partner, $organizer] = $this->createPartner();
         $event = $this->createEvent($organizer);
         $a = $this->createTicketType($event, ['harga' => 0]);
         $b = $this->createTicketType($event, ['harga' => 0]);
@@ -217,6 +217,19 @@ class MultiTicketFormFieldTest extends TestCase
         $payload['form_data']['tickets'][$b->id] = ['Club' => 'Beta'];
         $this->postJson('/api/orders', $payload)->assertCreated()->assertJsonPath('data.status', 'lunas');
         $this->assertEquals($payload['form_data'], Order::sole()->form_data);
+
+        $answers = $payload['form_data'];
+        $answers['tickets'][$unselected->id] = ['Club' => 'Do not export'];
+        $answers['tickets'][$a->id]['Unknown'] = 'Do not export either';
+        $answers['legacy'] = 'Old answer';
+        Order::sole()->update(['form_data' => $answers]);
+        Sanctum::actingAs($partner);
+        $this->getJson('/api/partner/buyers')->assertOk()
+            ->assertJsonPath('data.0.form_export', [
+                ['label' => 'Club', 'ticket_id' => $a->id, 'value' => 'Alpha'],
+                ['label' => 'Club', 'ticket_id' => $b->id, 'value' => 'Beta'],
+                ['label' => 'Legacy', 'ticket_id' => $c->id, 'value' => 'Yes'],
+            ]);
     }
 
     private function field(Event $event, array $attributes): FormField
