@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Enums\PayoutStatus;
+use App\Enums\VoucherStatus;
+use App\Enums\VoucherType;
 use App\Models\Order;
 use App\Models\Payout;
+use App\Models\Voucher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
@@ -72,6 +75,62 @@ class PartnerSalesPayoutTest extends TestCase
             ->assertOk()
             ->assertJsonPath('summary.tiket_terjual', 2)
             ->assertJsonPath('summary.order_pending', 1);
+    }
+
+    public function test_sales_revenue_follows_the_discount_applied_to_orders(): void
+    {
+        [$user, $organizer] = $this->createPartner();
+        $event = $this->createEvent($organizer);
+        $ticket = $this->createTicketType($event, ['harga' => 100000, 'kuota' => 20, 'sisa_kuota' => 20]);
+
+        // Voucher 100%: pembeli tidak membayar apa pun, jadi pendapatannya Rp0.
+        Voucher::create([
+            'organizer_id' => $organizer->id,
+            'event_id' => $event->id,
+            'kode' => 'GRATIS',
+            'tipe_diskon' => VoucherType::PERCENT,
+            'nilai' => 100,
+            'kuota' => 10,
+            'status' => VoucherStatus::ACTIVE,
+        ]);
+
+        Queue::fake();
+
+        $kode = $this->postJson('/api/orders', [
+            'event_id' => $event->id,
+            'nama' => 'Sinta',
+            'email' => 'sinta@mail.com',
+            'whatsapp' => '0812',
+            'voucher_code' => 'GRATIS',
+            'items' => [['ticket_type_id' => $ticket->id, 'jumlah' => 2]],
+        ])->assertCreated()->json('data.kode_order');
+
+        $this->getJson("/api/payments/{$kode}/fake")->assertOk();
+
+        $order = Order::where('kode_order', $kode)->firstOrFail();
+        $this->assertSame(200000.0, (float) $order->subtotal);
+        $this->assertSame(200000.0, (float) $order->diskon);
+        $this->assertSame(0.0, (float) $order->total_harga);
+
+        // Order berbayar biasa sebagai pembanding: 1 tiket, tanpa voucher.
+        $this->makePaidOrder($event, $ticket, 1);
+
+        Sanctum::actingAs($user);
+
+        $sales = $this->getJson('/api/partner/sales')->assertOk();
+
+        // 3 tiket terjual; nilainya hanya tiket yang benar-benar dibayar.
+        $sales->assertJsonPath('summary.total_terjual', 3)
+            ->assertJsonPath('summary.total_pendapatan', 100000)
+            ->assertJsonPath('summary.total_diskon', 200000)
+            ->assertJsonPath('data.0.terjual', 3)
+            ->assertJsonPath('data.0.pendapatan', 100000)
+            ->assertJsonPath('data.0.diskon', 200000);
+
+        // Harus sama dengan halaman keuangan supaya klien tidak bingung.
+        $this->getJson('/api/partner/finance')
+            ->assertOk()
+            ->assertJsonPath('summary.pendapatan_kotor', $sales->json('summary.total_pendapatan'));
     }
 
     public function test_partner_can_request_payout_only_with_bank_and_sufficient_balance(): void

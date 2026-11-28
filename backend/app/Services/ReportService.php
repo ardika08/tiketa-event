@@ -10,7 +10,6 @@ use App\Models\Order;
 use App\Models\Organizer;
 use App\Models\Payout;
 use App\Models\Ticket;
-use App\Models\TicketType;
 
 class ReportService
 {
@@ -62,37 +61,77 @@ class ReportService
      */
     public function partnerSales(int $organizerId): array
     {
-        $ticketTypes = TicketType::query()
-            ->whereHas('event', fn ($q) => $q->where('organizer_id', $organizerId))
-            ->with(['event:id,nama_event'])
-            ->withSum(['orderItems as terjual' => function ($q) {
-                $q->whereHas('order', fn ($o) => $o->where('status', OrderStatus::PAID));
-            }], 'jumlah')
-            ->withSum(['orderItems as pendapatan' => function ($q) {
-                $q->whereHas('order', fn ($o) => $o->where('status', OrderStatus::PAID));
-            }], 'subtotal')
-            ->orderByDesc('event_id')
-            ->get()
-            ->map(fn ($t) => [
-                'id' => $t->id,
-                'event' => $t->event?->nama_event,
-                'nama_tiket' => $t->nama_tiket,
-                'harga' => (float) $t->harga,
-                'kuota' => (int) $t->kuota,
-                'sisa_kuota' => (int) $t->sisa_kuota,
-                'terjual' => (int) ($t->terjual ?? 0),
-                'pendapatan' => (float) ($t->pendapatan ?? 0),
-                'status' => $t->status,
+        // Diskon dihitung per order (voucher bisa 100%), jadi tidak bisa
+        // ditempelkan ke satu jenis tiket saja. Karena itu bruto diambil dari
+        // item, lalu diskon order dialokasikan proporsional ke tiap jenis tiket.
+        // Urutan daftar mengikuti kemunculan pertama, jadi stabil antar request.
+        $orders = $this->paidOrdersForOrganizer($organizerId)
+            ->with([
+                'items:id,order_id,ticket_type_id,jumlah,subtotal',
+                'items.ticketType:id,nama_tiket,event_id,harga,kuota,sisa_kuota,status',
+                'items.ticketType.event:id,nama_event',
             ])
-            ->all();
+            ->get();
+
+        $rows = [];
+        foreach ($orders as $order) {
+            $diskon = min((float) $order->diskon, (float) $order->subtotal);
+            $orderBruto = (float) $order->items->sum(fn ($item) => (float) $item->subtotal);
+            $reduction = $orderBruto > 0 ? $diskon / $orderBruto : 0.0;
+
+            foreach ($order->items as $item) {
+                $type = $item->ticketType;
+                if (! $type) {
+                    continue;
+                }
+
+                $id = (int) $type->id;
+                if (! isset($rows[$id])) {
+                    $rows[$id] = [
+                        'id' => $id,
+                        'event' => $type->event?->nama_event,
+                        'nama_tiket' => $type->nama_tiket,
+                        'harga' => (float) $type->harga,
+                        'kuota' => (int) $type->kuota,
+                        'sisa_kuota' => (int) $type->sisa_kuota,
+                        'terjual' => 0,
+                        'pendapatan' => 0.0,
+                        'diskon' => 0.0,
+                        'status' => $type->status,
+                        'harga_satuan_rata_rata' => 0.0,
+                    ];
+                }
+
+                $bruto = (float) $item->subtotal;
+                $potongan = $bruto * $reduction;
+
+                $rows[$id]['terjual'] += (int) $item->jumlah;
+                $rows[$id]['pendapatan'] += $bruto - $potongan;
+                $rows[$id]['diskon'] += $potongan;
+            }
+        }
+
+        $rows = array_values($rows);
+        foreach ($rows as $index => $row) {
+            $rows[$index]['pendapatan'] = round($row['pendapatan'], 2);
+            $rows[$index]['diskon'] = round($row['diskon'], 2);
+            // Harga yang benar-benar dibayar per tiket — pembeda paling jelas
+            // untuk tiket yang sebagian terjual lewat voucher diskon.
+            $rows[$index]['harga_satuan_rata_rata'] = $row['terjual'] > 0
+                ? round($rows[$index]['pendapatan'] / $row['terjual'], 2)
+                : 0.0;
+        }
+
+        $totalPendapatan = (float) array_sum(array_column($rows, 'pendapatan'));
 
         return [
             'summary' => [
-                'total_terjual' => (int) array_sum(array_column($ticketTypes, 'terjual')),
-                'total_pendapatan' => (float) array_sum(array_column($ticketTypes, 'pendapatan')),
-                'total_jenis_tiket' => count($ticketTypes),
+                'total_terjual' => (int) array_sum(array_column($rows, 'terjual')),
+                'total_pendapatan' => round($totalPendapatan, 2),
+                'total_diskon' => round((float) array_sum(array_column($rows, 'diskon')), 2),
+                'total_jenis_tiket' => count($rows),
             ],
-            'data' => $ticketTypes,
+            'data' => $rows,
         ];
     }
 

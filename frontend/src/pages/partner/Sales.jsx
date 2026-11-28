@@ -27,17 +27,18 @@ export default function Sales() {
 
   const totalTerjual = filtered.reduce((s, r) => s + (r.terjual || 0), 0)
   const totalPendapatan = filtered.reduce((s, r) => s + (r.pendapatan || 0), 0)
+  const totalDiskon = filtered.reduce((s, r) => s + (r.diskon || 0), 0)
 
   return (
     <div>
       <PageHeader
         title="Penjualan Tiket"
-        description="Rekap tiket yang benar-benar terjual (pembayaran lunas) per jenis tiket."
+        description="Rekap tiket yang benar-benar terjual (pembayaran lunas) per jenis tiket. Nilainya sudah dipotong voucher diskon, jadi sama dengan Pendapatan Kotor di halaman Keuangan."
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Tiket Terjual" value={totalTerjual.toLocaleString('id-ID')} icon={Ticket} color="green" hint="Hanya order lunas" />
-        <Stat label="Pendapatan Tiket" value={formatRupiah(totalPendapatan)} icon={Wallet} color="brand" />
+        <Stat label="Pendapatan Tiket" value={formatRupiah(totalPendapatan)} icon={Wallet} color="brand" hint="Sudah dipotong diskon" />
         <Stat label="Jenis Tiket" value={filtered.length.toLocaleString('id-ID')} icon={TrendingUp} color="blue" />
       </div>
 
@@ -45,6 +46,12 @@ export default function Sales() {
         <Badge color="green">Akurat</Badge>
         Hanya pesanan berstatus <span className="font-semibold">lunas</span> yang dihitung. Order yang belum dibayar tidak masuk rekap ini.
       </div>
+      {totalDiskon > 0 && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <Badge color="amber">Voucher</Badge>
+          Nilai di atas adalah uang yang benar-benar masuk. Diskon voucher yang sudah terpakai: <span className="font-semibold">{formatRupiah(totalDiskon)}</span>
+        </div>
+      )}
 
       <Card className="mt-4 p-4">
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -66,15 +73,17 @@ export default function Sales() {
           <EmptyState icon={Ticket} title="Belum ada penjualan" description="Tiket yang terjual (lunas) akan muncul di sini." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[1040px] text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
                   <th className="px-5 py-3 font-semibold">Jenis Tiket</th>
                   <th className="px-5 py-3 font-semibold">Event</th>
                   <th className="px-5 py-3 font-semibold">Harga</th>
+                  <th className="px-5 py-3 font-semibold">Rata-rata Dibayar</th>
                   <th className="px-5 py-3 font-semibold">Terjual / Kuota</th>
                   <th className="px-5 py-3 font-semibold">Sisa</th>
                   <th className="px-5 py-3 font-semibold">Pendapatan</th>
+                  <th className="px-5 py-3 font-semibold">Diskon</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -86,6 +95,12 @@ export default function Sales() {
                     </td>
                     <td className="px-5 py-3 text-slate-600">{r.event}</td>
                     <td className="px-5 py-3 font-medium text-slate-700">{formatRupiah(r.harga)}</td>
+                    <td className="px-5 py-3 text-slate-600">
+                      {r.terjual > 0 ? formatRupiah(r.harga_satuan_rata_rata || 0) : '—'}
+                      {(r.diskon || 0) > 0 && (
+                        <p className="mt-0.5 text-xs text-amber-700">ada diskon voucher</p>
+                      )}
+                    </td>
                     <td className="px-5 py-3 w-52">
                       <div className="mb-1 flex justify-between text-xs text-slate-500">
                         <span className="font-semibold text-slate-700">{(r.terjual || 0).toLocaleString('id-ID')} terjual</span>
@@ -95,6 +110,9 @@ export default function Sales() {
                     </td>
                     <td className="px-5 py-3 text-slate-600">{r.sisa_kuota.toLocaleString('id-ID')}</td>
                     <td className="px-5 py-3 font-semibold text-slate-800">{formatRupiah(r.pendapatan || 0)}</td>
+                    <td className="px-5 py-3 text-amber-700">
+                      {(r.diskon || 0) > 0 ? formatRupiah(r.diskon) : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
