@@ -161,14 +161,14 @@ export function Stat({ label, value, icon: Icon, hint, trend, color = 'brand' })
   return (
     <Card className="p-5">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-slate-500">{label}</p>
-          <p className="mt-1.5 truncate text-[28px] font-bold leading-tight text-slate-900">{value}</p>
+          <p className="mt-1.5 truncate text-[22px] font-bold leading-tight tracking-tight text-slate-900 tabular-nums sm:text-[24px] xl:text-[26px]">{value}</p>
           {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
           {trend && <p className="mt-1 text-xs font-semibold text-emerald-600">{trend}</p>}
         </div>
         {Icon && (
-          <div className={cn('rounded-[var(--radius-control)] p-2.5', colors[color])}>
+          <div className={cn('shrink-0 rounded-[var(--radius-control)] p-2.5', colors[color])}>
             <Icon size={20} />
           </div>
         )}

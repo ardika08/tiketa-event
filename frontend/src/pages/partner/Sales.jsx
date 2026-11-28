@@ -25,9 +25,12 @@ export default function Sales() {
     [rows, q, eventName],
   )
 
-  const totalTerjual = filtered.reduce((s, r) => s + (r.terjual || 0), 0)
-  const totalPendapatan = filtered.reduce((s, r) => s + (r.pendapatan || 0), 0)
-  const totalDiskon = filtered.reduce((s, r) => s + (r.diskon || 0), 0)
+  // Kartu ringkasan memakai `summary` dari server, bukan hasil filter.
+  // Kalau dihitung dari `filtered`, mengetik pencarian akan mengubah total
+  // dan angkanya tidak lagi sama dengan halaman Keuangan.
+  const totalTerjual = Number(summary.total_terjual ?? rows.reduce((s, r) => s + (r.terjual || 0), 0))
+  const totalPendapatan = Number(summary.total_pendapatan ?? rows.reduce((s, r) => s + (r.pendapatan || 0), 0))
+  const totalDiskon = Number(summary.total_diskon ?? rows.reduce((s, r) => s + (r.diskon || 0), 0))
 
   return (
     <div>
@@ -36,10 +39,10 @@ export default function Sales() {
         description="Rekap tiket yang benar-benar terjual (pembayaran lunas) per jenis tiket. Nilainya sudah dipotong voucher diskon, jadi sama dengan Pendapatan Kotor di halaman Keuangan."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-4">
         <Stat label="Tiket Terjual" value={totalTerjual.toLocaleString('id-ID')} icon={Ticket} color="green" hint="Hanya order lunas" />
         <Stat label="Pendapatan Tiket" value={formatRupiah(totalPendapatan)} icon={Wallet} color="brand" hint="Sudah dipotong diskon" />
-        <Stat label="Jenis Tiket" value={filtered.length.toLocaleString('id-ID')} icon={TrendingUp} color="blue" />
+        <Stat label="Jenis Tiket" value={Number(summary.total_jenis_tiket ?? rows.length).toLocaleString('id-ID')} icon={TrendingUp} color="blue" />
       </div>
 
       <div className="mt-6 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

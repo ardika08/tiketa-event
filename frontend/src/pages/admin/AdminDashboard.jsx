@@ -42,7 +42,7 @@ export default function AdminDashboard() {
     <div>
       <PageHeader title="Ringkasan Platform" description="Pantau seluruh aktivitas Nontix dalam satu tampilan." />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <Stat label="Total Event" value={(summary.total_event || 0).toLocaleString('id-ID')} icon={CalendarDays} color="brand" hint={`${summary.event_aktif || 0} event aktif`} />
         <Stat label="Mitra Terdaftar" value={(summary.total_mitra || 0).toLocaleString('id-ID')} icon={Handshake} color="blue" hint={`${summary.mitra_terverifikasi || 0} terverifikasi`} />
         <Stat label="Tiket Terjual" value={(summary.tiket_terjual || 0).toLocaleString('id-ID')} icon={Ticket} color="green" hint="Hanya pesanan lunas" />

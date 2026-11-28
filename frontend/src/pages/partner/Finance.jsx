@@ -297,7 +297,7 @@ export default function Finance() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <Stat label="Pendapatan Kotor" value={formatRupiah(summary.kotor)} icon={Wallet} color="blue" />
         <Stat label="Biaya Layanan" value={formatRupiah(summary.biaya)} icon={TrendingDown} color="amber" hint={`${summary.tiket} tiket × ${formatRupiah(BIAYA_LAYANAN)}`} />
         <Stat label="Pemasukan Bersih" value={formatRupiah(summary.bersih)} icon={PiggyBank} color="green" />
